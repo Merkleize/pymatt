@@ -81,6 +81,65 @@ def vch2bn(s: bytes) -> int:
     return -v_abs if is_negative else v_abs
 
 
+class Clause:
+    def __init__(self, name: str, script: CScript):
+        self.name = name
+        self.script = script
+
+    def stack_elements_from_args(self, args: dict) -> List[bytes]:
+        raise NotImplementedError
+
+    def args_from_stack_elements(self, elements: List[bytes]) -> dict:
+        raise NotImplementedError
+
+
+StandardType = type[int] | type[bytes]
+
+
+# A StandardClause encodes simple scripts where the witness is exactly
+# a list of arguments, always in the same order, and each is either
+# an integer or a byte array.
+# Other types of generic treatable clauses could be defined (for example, a MiniscriptClause).
+class StandardClause(Clause):
+    def __init__(self, name: str, script: CScript, arg_specs: list[tuple[str, StandardType]]):
+        super().__init__(name, script)
+        self.arg_specs = arg_specs
+
+        for _, arg_cls in self.arg_specs:
+            if arg_cls not in [int, bytes]:
+                raise ValueError(f"Unsupported type: {arg_cls.__name__}")
+
+    def stack_elements_from_args(self, args: dict) -> list[bytes]:
+        result: list[bytes] = []
+        for arg_name, arg_cls in self.arg_specs:
+            if arg_name not in args:
+                raise ValueError(f"Missing argument: {arg_name}")
+            arg_value = args[arg_name]
+            if type(arg_value) != arg_cls:
+                raise ValueError(f"Argument {arg_name} must be of type {arg_cls.__name__}, not {type(arg_value).__name__}")
+            if arg_cls == int:
+                result.append(script.bn2vch(arg_value))
+            elif arg_cls == bytes:
+                result.append(arg_value)
+            else:
+                raise ValueError("Unexpected type")  # this should never happen
+
+        return result
+
+    def args_from_stack_elements(self, elements: List[bytes]) -> dict:
+        result: dict = {}
+        if len(elements) != len(self.arg_specs):
+            raise ValueError(f"Expected {len(self.arg_specs)} elements, not {len(elements)}")
+        for i, (arg_name, arg_cls) in enumerate(self.arg_specs):
+            if arg_cls == int:
+                result[arg_name] = vch2bn(elements[i])
+            elif arg_cls == bytes:
+                result[arg_name] = elements[i]
+            else:
+                raise ValueError("Unexpected type")  # this should never happen
+        return result
+
+
 class P2TR:
     """
     A class representing a Pay-to-Taproot script.
@@ -133,13 +192,81 @@ class AugmentedP2TR:
         return CTxOut(nValue=value, scriptPubKey=self.get_tr_info(data).scriptPubKey)
 
 
+class StandardP2TR(P2TR):
+    """
+    A StandardP2TR where all the transitions are given by a StandardClause.
+    """
+
+    def __init__(self, internal_pubkey: bytes, clauses: list[StandardClause]):
+        super().__init__(internal_pubkey, list(map(lambda x: (x.name, x.script), clauses)))
+        self.clauses = clauses
+        self._clauses_dict = {clause.name: clause for clause in clauses}
+
+    def get_scripts(self) -> List[Tuple[str, CScript]]:
+        return list(map(lambda clause: (clause.name, clause.script), self.clauses))
+
+    def encode_args(self, clause_name: str, **args: dict) -> list[bytes]:
+        return [
+            *self._clauses_dict[clause_name].stack_elements_from_args(args),
+            self.get_tr_info().leaves[clause_name].script,
+            self.get_tr_info().controlblock_for_script_spend(clause_name),
+        ]
+
+    def decode_wit_stack(self, stack_elems: list[bytes]) -> tuple[str, dict]:
+        leaf_hash = stack_elems[-2]
+
+        clause_name = None
+        for clause in self.clauses:
+            if leaf_hash == self.get_tr_info().leaves[clause.name].script:
+                clause_name = clause.name
+                break
+        if clause_name is None:
+            raise ValueError("Clause not found")
+
+        return clause_name, self._clauses_dict[clause_name].args_from_stack_elements(stack_elems[:-2])
+
+
+class StandardAugmentedP2TR(AugmentedP2TR):
+    """
+    An AugmentedP2TR where all the transitions are given by a StandardClause.
+    """
+
+    def __init__(self, naked_internal_pubkey: bytes, clauses: list[StandardClause]):
+        super().__init__(naked_internal_pubkey)
+        self.clauses = clauses
+        self._clauses_dict = {clause.name: clause for clause in clauses}
+
+    def get_scripts(self) -> List[Tuple[str, CScript]]:
+        return list(map(lambda clause: (clause.name, clause.script), self.clauses))
+
+    def encode_args(self, clause_name: str, data: bytes, **args: dict) -> list[bytes]:
+        return [
+            *self._clauses_dict[clause_name].stack_elements_from_args(args),
+            self.get_tr_info(data).leaves[clause_name].script,
+            self.get_tr_info(data).controlblock_for_script_spend(clause_name),
+        ]
+
+    def decode_wit_stack(self, data: bytes, stack_elems: list[bytes]) -> tuple[str, dict]:
+        leaf_hash = stack_elems[-2]
+
+        clause_name = None
+        for clause in self.clauses:
+            if leaf_hash == self.get_tr_info(data).leaves[clause.name].script:
+                clause_name = clause.name
+                break
+        if clause_name is None:
+            raise ValueError("Clause not found")
+
+        return clause_name, self._clauses_dict[clause_name].args_from_stack_elements(stack_elems[:-2])
+
+
 # params:
 #  - alice_pk
 #  - bob_pk
 #  - c_a
 # spending conditions:
 #  - bob_pk    (m_b) => RPSGameS0[m_b]
-class RPSGameS0(P2TR):
+class RPSGameS0(StandardP2TR):
     def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes):
         assert len(alice_pk) == 32 and len(bob_pk) == 32 and len(c_a) == 32
 
@@ -148,7 +275,7 @@ class RPSGameS0(P2TR):
         self.c_a = c_a
 
         # witness: <m_b> <bob_sig>
-        bob_move = (
+        bob_move = StandardClause(
             "bob_move",
             CScript([
                 bob_pk,
@@ -165,7 +292,10 @@ class RPSGameS0(P2TR):
                 RPSGameS1(alice_pk, bob_pk, c_a).get_taptree(),
                 0,  # flags
                 OP_CHECKCONTRACTVERIFY,
-            ])
+            ]), [
+                ('m_b', int),
+                ('bob_sig', bytes),
+            ]
         )
 
         super().__init__(NUMS_KEY, [bob_move])
@@ -181,15 +311,12 @@ class RPSGameS0(P2TR):
 #  - alice_pk, reveal winning move => ctv(alice wins)
 #  - alice_pk, reveal losing move => ctv(bob wins)
 #  - alice_pk, reveal tie move => ctv(tie)
-class RPSGameS1(AugmentedP2TR):
+class RPSGameS1(StandardAugmentedP2TR):
     def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
         self.c_a = c_a
 
-        super().__init__(NUMS_KEY)
-
-    def get_scripts(self):
         def make_script(outcome: int, ctv_hash: bytes):
             assert 0 <= outcome <= 2
             # witness: [<m_b> <m_a> <r_a>]
@@ -260,11 +387,16 @@ class RPSGameS1(AugmentedP2TR):
         ctvhash_bob_wins = make_ctv_hash(0, 2*STAKE)
         ctvhash_tie = make_ctv_hash(STAKE, STAKE)
 
-        alice_wins = ("tie", make_script(0, ctvhash_tie))
-        bob_wins = ("bob_wins", make_script(1, ctvhash_bob_wins))
-        tie = ("alice_wins", make_script(2, ctvhash_alice_wins))
+        arg_specs = [
+            ('m_b', int),
+            ('m_a', int),
+            ('r_a', bytes),
+        ]
+        alice_wins = StandardClause("tie", make_script(0, ctvhash_tie), arg_specs)
+        bob_wins = StandardClause("bob_wins", make_script(1, ctvhash_bob_wins), arg_specs)
+        tie = StandardClause("alice_wins", make_script(2, ctvhash_alice_wins), arg_specs)
 
-        return [alice_wins, bob_wins, tie]
+        super().__init__(NUMS_KEY, [alice_wins, bob_wins, tie])
 
 
 load_dotenv()
@@ -379,20 +511,11 @@ class AliceGame(Player):
 
         assert len(in_wit.scriptWitness.stack) == 4
 
-        [m_b_bytes, bob_sig, leaf_script, control_block] = in_wit.scriptWitness.stack
-
-        assert leaf_script == contract_S0.get_tr_info().leaves["bob_move"].script
-        assert control_block == contract_S0.get_tr_info().controlblock_for_script_spend("bob_move")
-
-        assert 0 <= len(m_b_bytes) <= 1
-
-        m_b = vch2bn(m_b_bytes)
-        m_b_hash = sha256(m_b_bytes)
-
+        _, args = contract_S0.decode_wit_stack(in_wit.scriptWitness.stack)
+        m_b: int = args['m_b']
         assert 0 <= m_b <= 2
 
-        print(m_b_bytes.hex())
-        print(f"Bob's move: {m_b} ({RPS.move_str(m_b)}). Hash: {m_b_hash.hex()}")
+        print(f"Bob's move: {m_b} ({RPS.move_str(m_b)}).")
 
         outcome = RPS.adjudicate(m_a, m_b)
         print(f"Game result: {outcome}")
@@ -431,14 +554,10 @@ class AliceGame(Player):
                 )
             ]
 
+        m_b_hash = sha256(script.bn2vch(m_b))
+
         tx_payout.wit.vtxinwit = [CTxInWitness()]
-        tx_payout.wit.vtxinwit[0].scriptWitness.stack = [
-            script.bn2vch(m_b),
-            script.bn2vch(m_a),
-            r_a,
-            RPS_S1.get_tr_info(m_b_hash).leaves[outcome].script,
-            RPS_S1.get_tr_info(m_b_hash).controlblock_for_script_spend(outcome),
-        ]
+        tx_payout.wit.vtxinwit[0].scriptWitness.stack = RPS_S1.encode_args(outcome, m_b_hash, m_b=m_b, m_a=m_a, r_a=r_a)
 
         self.prompt("Broadcasting adjudication transaction")
         txid = rpc.sendrawtransaction(tx_payout.serialize().hex())
@@ -518,12 +637,8 @@ class BobGame(Player):
         bob_sig = key.sign_schnorr(self.priv_key.privkey, sighash)
 
         tx.wit.vtxinwit = [CTxInWitness()]
-        tx.wit.vtxinwit[0].scriptWitness.stack = [
-            script.bn2vch(m_b),
-            bob_sig,
-            contract_S0.get_tr_info().leaves["bob_move"].script,
-            contract_S0.get_tr_info().controlblock_for_script_spend("bob_move"),
-        ]
+
+        tx.wit.vtxinwit[0].scriptWitness.stack = contract_S0.encode_args('bob_move', m_b=m_b, bob_sig=bob_sig)
 
         txid = tx.rehash()
 
@@ -544,10 +659,9 @@ class BobGame(Player):
         tx, vin, last_height = wait_for_spending_tx(rpc, contract_S1_outpoint, starting_height=last_height)
         in_wit: CTxInWitness = tx.wit.vtxinwit[vin]
 
-        leaf_script, control_block = in_wit.scriptWitness.stack[-2:]
-        for transition_name in map(lambda x: x[0], S1.get_scripts()):
-            if leaf_script == S1.get_tr_info(m_b_hash).leaves[transition_name].script and control_block == S1.get_tr_info(m_b_hash).controlblock_for_script_spend(transition_name):
-                print(f"Outcome: {transition_name}")
+        outcome, _ = S1.decode_wit_stack(m_b_hash, in_wit.scriptWitness.stack)
+
+        print(f"Outcome: {outcome}")
 
         s.close()
 
