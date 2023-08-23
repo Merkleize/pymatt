@@ -37,7 +37,6 @@ and play the moves when it's their turn, as per the rules.
 
 """
 
-from io import BytesIO
 import argparse
 import socket
 import json
@@ -53,8 +52,8 @@ from btctools.auth_proxy import AuthServiceProxy
 import btctools.key as key
 from btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut, sha256
 import btctools.script as script
-from matt import P2TR
-from utils import wait_for_output, wait_for_spending_tx
+from matt import P2TR, ContractInstance, ContractManager
+from utils import wait_for_spending_tx
 
 from rps_contracts import RPSGameS0, RPSGameS1
 
@@ -152,32 +151,27 @@ class AliceGame(Player):
         pk_b = bytes.fromhex(bob_msg['pk_b'])
         print(f"Alice's state: m_a={m_a}, r_a={r_a.hex()}, c_a={c_a.hex()}, pk_a={pk_a.hex()}, pk_b={pk_b.hex()}")
 
-        contract_S0 = RPSGameS0(pk_a, pk_b, c_a)
+        S0 = RPSGameS0(pk_a, pk_b, c_a)
+        S0_addr = encode_segwit_address("bcrt", 1, bytes(S0.get_tr_info().scriptPubKey)[2:])
 
-        contract_S0_addr = encode_segwit_address("bcrt", 1, bytes(contract_S0.get_tr_info().scriptPubKey)[2:])
-
-        print(f"Alice waiting for output: {contract_S0_addr}")
+        print(f"Alice waiting for output: {S0_addr}")
 
         rpc = self.get_rpc()
 
-        contract_S0_outpoint, last_height = wait_for_output(rpc, contract_S0.get_tr_info().scriptPubKey)
+        C = ContractInstance(S0)
+        M = ContractManager([C], rpc, mine_automatically=self.args.mine_automatically)
+
+        M.wait_for_outpoint(C)
 
         # Wait for bob to spend it
 
         print("Waiting for Bob's move...")
 
-        print(f"Outpoint: {hex(contract_S0_outpoint.hash)}:{contract_S0_outpoint.n}")
-        tx, vin, last_height = wait_for_spending_tx(rpc, contract_S0_outpoint, starting_height=last_height)
-        tx.rehash()
+        print(f"Outpoint: {hex(C.outpoint.hash)}:{C.outpoint.n}")
+        [C2] = M.wait_for_spend(C)
 
         # Decode bob's move
-
-        in_wit: CTxInWitness = tx.wit.vtxinwit[vin]
-
-        assert len(in_wit.scriptWitness.stack) == 4
-
-        _, args = contract_S0.decode_wit_stack(in_wit.scriptWitness.stack)
-        m_b: int = args['m_b']
+        m_b: int = C.spending_args['m_b']
         assert 0 <= m_b <= 2
 
         print(f"Bob's move: {m_b} ({RPS.move_str(m_b)}).")
@@ -185,50 +179,17 @@ class AliceGame(Player):
         outcome = RPS.adjudicate(m_a, m_b)
         print(f"Game result: {outcome}")
 
-        # TODO: Payout
-        RPS_S1 = RPSGameS1(pk_a, pk_b, c_a)
-
-        tx_payout = CTransaction()
-        tx_payout.nVersion = 2
-        tx_payout.vin = [
-            CTxIn(nSequence=0, outpoint=COutPoint(int(tx.hash, 16), vin))
-        ]
-        if outcome == "alice_wins":
-            tx_payout.vout = [
-                CTxOut(
-                    nValue=STAKE * 2,
-                    scriptPubKey=P2TR(pk_a, []).get_tr_info().scriptPubKey
-                )
-            ]
-        elif outcome == "bob_wins":
-            tx_payout.vout = [
-                CTxOut(
-                    nValue=STAKE * 2,
-                    scriptPubKey=P2TR(pk_b, []).get_tr_info().scriptPubKey
-                )
-            ]
-        else:
-            tx_payout.vout = [
-                CTxOut(
-                    nValue=STAKE,
-                    scriptPubKey=P2TR(pk_a, []).get_tr_info().scriptPubKey
-                ),
-                CTxOut(
-                    nValue=STAKE,
-                    scriptPubKey=P2TR(pk_b, []).get_tr_info().scriptPubKey
-                )
-            ]
-
-        m_b_hash = sha256(script.bn2vch(m_b))
-
-        tx_payout.wit.vtxinwit = [CTxInWitness()]
-        tx_payout.wit.vtxinwit[0].scriptWitness.stack = RPS_S1.encode_args(outcome, m_b_hash, m_b=m_b, m_a=m_a, r_a=r_a)
+        args = {
+            "m_a": m_a,
+            "m_b": m_b,
+            "r_a": r_a,
+        }
+        tx_payout = M.get_spend_tx(C2, outcome, args)
+        tx_payout.wit.vtxinwit = [M.get_spend_wit(C2, outcome, args)]
 
         self.prompt("Broadcasting adjudication transaction")
-        txid = rpc.sendrawtransaction(tx_payout.serialize().hex())
-        print(f"txid: {txid}")
 
-        self.mine()
+        M.spend_and_wait(C2, tx_payout)
 
         s.close()
 
@@ -264,10 +225,10 @@ class BobGame(Player):
 
         rpc = self.get_rpc()
 
-        contract_outpoint, last_height = wait_for_output(rpc, contract_S0.get_tr_info().scriptPubKey)
-        outpoint_tx_raw = rpc.getrawtransaction(contract_outpoint.hash.to_bytes(32, byteorder="big").hex())
-        outpoint_tx = CTransaction()
-        outpoint_tx.deserialize(BytesIO(bytes.fromhex(outpoint_tx_raw)))
+        C = ContractInstance(contract_S0)
+        M = ContractManager([C], rpc, mine_automatically=self.args.mine_automatically)
+
+        M.wait_for_outpoint(C)
 
         # Make move
 
@@ -276,24 +237,16 @@ class BobGame(Player):
         print(f"Bob's move: {m_b} ({RPS.move_str(m_b)})")
         print(f"Bob's move's hash: {m_b_hash.hex()}")
 
-        S1 = RPSGameS1(pk_a, pk_b, c_a)
+        tx = M.get_spend_tx(C, "bob_move", {'m_b': m_b})
 
-        tx = CTransaction()
-        tx.nVersion = 2
-        tx.vin = [
-            CTxIn(outpoint=contract_outpoint)
-        ]
-        tx.vout = [
-            CTxOut(
-                nValue=outpoint_tx.vout[contract_outpoint.n].nValue,
-                scriptPubKey=S1.get_tr_info(m_b_hash).scriptPubKey
-            )
-        ]
+        vout: list[CTxOut] = tx.vout
+        vout[0].nValue = 2000  # TODO: add amount management in framework
 
+        # TODO: add some utility to get the sighash, too
         # compute Bob's signature:
         sighash = script.TaprootSignatureHash(
             tx,
-            [outpoint_tx.vout[contract_outpoint.n]],
+            [C.funding_tx.vout[C.outpoint.n]],
             input_index=0,
             hash_type=0,
             scriptpath=True,
@@ -301,32 +254,21 @@ class BobGame(Player):
         )
         bob_sig = key.sign_schnorr(self.priv_key.privkey, sighash)
 
-        tx.wit.vtxinwit = [CTxInWitness()]
-
-        tx.wit.vtxinwit[0].scriptWitness.stack = contract_S0.encode_args('bob_move', m_b=m_b, bob_sig=bob_sig)
-
-        txid = tx.rehash()
-
-        last_height = rpc.getblockcount()  # keep track of the bock height before we broadcast the transaction
+        tx.wit.vtxinwit = [M.get_spend_wit(C, "bob_move", {'m_b': m_b, 'bob_sig': bob_sig})]
 
         self.prompt("Broadcasting Bob's move transaction")
-        rpc.sendrawtransaction(tx.serialize().hex())
 
+        [C2] = M.spend_and_wait(C, tx)
+
+        txid = C.spending_tx.hash
         print(f"Bob's move broadcasted: {m_b}. txid: {txid}")
-
-        self.mine()
 
         print("Waiting for adjudication")
 
-        contract_S1_outpoint = COutPoint(int(txid, 16), 0)
-
         # Wait for Alice to adjudicate
-        tx, vin, last_height = wait_for_spending_tx(rpc, contract_S1_outpoint, starting_height=last_height)
-        in_wit: CTxInWitness = tx.wit.vtxinwit[vin]
+        M.wait_for_spend(C2)
 
-        outcome, _ = S1.decode_wit_stack(m_b_hash, in_wit.scriptWitness.stack)
-
-        print(f"Outcome: {outcome}")
+        print(f"Outcome: {C2.spending_clause}")
 
         s.close()
 

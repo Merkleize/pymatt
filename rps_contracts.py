@@ -1,6 +1,6 @@
-from btctools.messages import CTransaction, CTxIn, CTxOut
-from btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript
-from matt import CCV_FLAG_CHECK_INPUT, P2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from btctools.messages import CTransaction, CTxIn, CTxOut, sha256
+from btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
+from matt import CCV_FLAG_CHECK_INPUT, P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
 
 # point with provably unknown private key
@@ -16,17 +16,20 @@ STAKE: int = 1000  # amount of sats that the players bet
 # spending conditions:
 #  - bob_pk    (m_b) => RPSGameS0[m_b]
 class RPSGameS0(StandardP2TR):
-    def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes):
+    def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes, stake: int = STAKE):
         assert len(alice_pk) == 32 and len(bob_pk) == 32 and len(c_a) == 32
 
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
         self.c_a = c_a
+        self.stake = stake
+
+        S1 = RPSGameS1(alice_pk, bob_pk, c_a, stake)
 
         # witness: <m_b> <bob_sig>
         bob_move = StandardClause(
-            "bob_move",
-            CScript([
+            name="bob_move",
+            script=CScript([
                 bob_pk,
                 OP_CHECKSIG,
                 OP_SWAP,
@@ -38,13 +41,15 @@ class RPSGameS0(StandardP2TR):
                 OP_SHA256,  # data = sha256(m_b)
                 0,  # index
                 0,  # NUMS pk
-                RPSGameS1(alice_pk, bob_pk, c_a).get_taptree(),
+                S1.get_taptree(),
                 0,  # flags
                 OP_CHECKCONTRACTVERIFY,
-            ]), [
+            ]),
+            arg_specs=[
                 ('m_b', int),
                 ('bob_sig', bytes),
-            ]
+            ],
+            next_output_fn=lambda args: [ClauseOutput(n=0, next_contract=S1, next_data=sha256(bn2vch(args['m_b'])))]
         )
 
         super().__init__(NUMS_KEY, [bob_move])
@@ -61,10 +66,11 @@ class RPSGameS0(StandardP2TR):
 #  - alice_pk, reveal losing move => ctv(bob wins)
 #  - alice_pk, reveal tie move => ctv(tie)
 class RPSGameS1(StandardAugmentedP2TR):
-    def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes):
+    def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes, stake: int):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
         self.c_a = c_a
+        self.stake = stake
 
         def make_script(diff: int, ctv_hash: bytes):
             # diff is (m_b - m_a) % 3
@@ -113,7 +119,7 @@ class RPSGameS1(StandardAugmentedP2TR):
                 OP_CHECKTEMPLATEVERIFY
             ])
 
-        def make_ctv_hash(alice_amount, bob_amount) -> bytes:
+        def make_ctv_hash(alice_amount, bob_amount) -> CTransaction:
             tmpl = CTransaction()
             tmpl.nVersion = 2
             tmpl.vin = [CTxIn(nSequence=0)]
@@ -131,19 +137,19 @@ class RPSGameS1(StandardAugmentedP2TR):
                         scriptPubKey=P2TR(self.bob_pk, []).get_tr_info().scriptPubKey
                     )
                 )
-            return tmpl.get_standard_template_hash(0)  # TODO: why 0? Is it correct?
+            return tmpl
 
-        ctvhash_alice_wins = make_ctv_hash(2*STAKE, 0)
-        ctvhash_bob_wins = make_ctv_hash(0, 2*STAKE)
-        ctvhash_tie = make_ctv_hash(STAKE, STAKE)
+        tmpl_alice_wins = make_ctv_hash(2*self.stake, 0)
+        tmpl_bob_wins = make_ctv_hash(0, 2*self.stake)
+        tmpl_tie = make_ctv_hash(self.stake, self.stake)
 
         arg_specs = [
             ('m_b', int),
             ('m_a', int),
             ('r_a', bytes),
         ]
-        alice_wins = StandardClause("tie", make_script(0, ctvhash_tie), arg_specs)
-        bob_wins = StandardClause("bob_wins", make_script(1, ctvhash_bob_wins), arg_specs)
-        tie = StandardClause("alice_wins", make_script(2, ctvhash_alice_wins), arg_specs)
+        alice_wins = StandardClause("tie", make_script(0, tmpl_alice_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_alice_wins)
+        bob_wins = StandardClause("bob_wins", make_script(1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_bob_wins)
+        tie = StandardClause("alice_wins", make_script(2, tmpl_tie.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_tie)
 
         super().__init__(NUMS_KEY, [alice_wins, bob_wins, tie])
