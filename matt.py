@@ -72,7 +72,7 @@ ArgSpecs = list[tuple[str, StandardType]]
 # Other types of generic treatable clauses could be defined (for example, a MiniscriptClause).
 # Moreover, it specifies a function that converts the arguments of the clause, to the data of the next output.
 class StandardClause(Clause):
-    def __init__(self, name: str, script: CScript, arg_specs: ArgSpecs, next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction]):
+    def __init__(self, name: str, script: CScript, arg_specs: ArgSpecs, next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction] | None):
         super().__init__(name, script)
         self.arg_specs = arg_specs
 
@@ -83,7 +83,10 @@ class StandardClause(Clause):
                 raise ValueError(f"Unsupported type: {arg_cls.__name__}")
 
     def next_outputs(self, args: dict) -> list[ClauseOutput] | CTransaction:
-        return self.next_outputs_fn(args)
+        if self.next_outputs_fn is not None:
+            return self.next_outputs_fn(args)
+        else:
+            return []
 
     def stack_elements_from_args(self, args: dict) -> list[bytes]:
         result: list[bytes] = []
