@@ -46,16 +46,14 @@ import os
 import subprocess
 
 from dotenv import load_dotenv
-from btctools.segwit_addr import encode_segwit_address
 from btctools.auth_proxy import AuthServiceProxy
 
 import btctools.key as key
-from btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut, sha256
+from btctools.messages import sha256
 import btctools.script as script
-from matt import P2TR, ContractInstance, ContractManager
-from utils import wait_for_spending_tx
+from matt import ContractInstance, ContractManager
 
-from rps_contracts import RPSGameS0, RPSGameS1
+from rps_contracts import RPSGameS0
 
 # point with provably unknown private key
 NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
@@ -108,10 +106,6 @@ class Player:
     def get_rpc(self) -> AuthServiceProxy:
         return AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
 
-    def mine(self, n_blocks: int = 1):
-        if self.args.mine_automatically:
-            subprocess.run(["bitcoin-cli", "-regtest", "-generate", str(n_blocks)], capture_output=True, text=True)
-
     def prompt(self, message: str | None = None):
         if message is not None:
             print(message)
@@ -128,6 +122,8 @@ class AliceGame(Player):
 
     def start_session(self, m_a: int):
         assert 0 <= m_a <= 2
+
+        # Beginning of the protocol: exchange of pubkeys
 
         print(f"Alice's move: {m_a} ({RPS.move_str(m_a)})")
 
@@ -151,14 +147,15 @@ class AliceGame(Player):
         pk_b = bytes.fromhex(bob_msg['pk_b'])
         print(f"Alice's state: m_a={m_a}, r_a={r_a.hex()}, c_a={c_a.hex()}, pk_a={pk_a.hex()}, pk_b={pk_b.hex()}")
 
+        # Create initial smart contract UTXO
         S0 = RPSGameS0(pk_a, pk_b, c_a)
-        S0_addr = encode_segwit_address("bcrt", 1, bytes(S0.get_tr_info().scriptPubKey)[2:])
-
-        print(f"Alice waiting for output: {S0_addr}")
 
         rpc = self.get_rpc()
 
         C = ContractInstance(S0)
+
+        print(f"Alice waiting for output: {C.get_address()}")
+
         M = ContractManager([C], rpc, mine_automatically=self.args.mine_automatically)
 
         M.wait_for_outpoint(C)
@@ -184,7 +181,7 @@ class AliceGame(Player):
             "m_b": m_b,
             "r_a": r_a,
         }
-        tx_payout = M.get_spend_tx(C2, outcome, args)
+        tx_payout, _ = M.get_spend_tx(C2, outcome, args)
         tx_payout.wit.vtxinwit = [M.get_spend_wit(C2, outcome, args)]
 
         self.prompt("Broadcasting adjudication transaction")
@@ -217,15 +214,15 @@ class BobGame(Player):
 
         s.send(json.dumps({'pk_b': pk_b.hex()}).encode())
 
-        contract_S0 = RPSGameS0(pk_a, pk_b, c_a)
+        # Create initial smart contract UTXO
 
-        contract_S0_addr = encode_segwit_address("bcrt", 1, bytes(contract_S0.get_tr_info().scriptPubKey)[2:])
-
-        print(f"Bob waiting for output: {contract_S0_addr}")
+        S0 = RPSGameS0(pk_a, pk_b, c_a)
+        C = ContractInstance(S0)
 
         rpc = self.get_rpc()
 
-        C = ContractInstance(contract_S0)
+        print(f"Bob waiting for output: {C.get_address()}")
+
         M = ContractManager([C], rpc, mine_automatically=self.args.mine_automatically)
 
         M.wait_for_outpoint(C)
@@ -237,21 +234,8 @@ class BobGame(Player):
         print(f"Bob's move: {m_b} ({RPS.move_str(m_b)})")
         print(f"Bob's move's hash: {m_b_hash.hex()}")
 
-        tx = M.get_spend_tx(C, "bob_move", {'m_b': m_b})
+        tx, sighash = M.get_spend_tx(C, "bob_move", {'m_b': m_b})
 
-        vout: list[CTxOut] = tx.vout
-        vout[0].nValue = 2000  # TODO: add amount management in framework
-
-        # TODO: add some utility to get the sighash, too
-        # compute Bob's signature:
-        sighash = script.TaprootSignatureHash(
-            tx,
-            [C.funding_tx.vout[C.outpoint.n]],
-            input_index=0,
-            hash_type=0,
-            scriptpath=True,
-            script=contract_S0.get_tr_info().leaves["bob_move"].script
-        )
         bob_sig = key.sign_schnorr(self.priv_key.privkey, sighash)
 
         tx.wit.vtxinwit = [M.get_spend_wit(C, "bob_move", {'m_b': m_b, 'bob_sig': bob_sig})]
@@ -280,8 +264,8 @@ if __name__ == "__main__":
 
     # Group for mutually exclusive options: alice and bob
     group_player = parser.add_mutually_exclusive_group(required=True)
-    group_player.add_argument("--alice", "-a", action="store_true", help="Alice mode")
-    group_player.add_argument("--bob", "-b", action="store_true", help="Bob mode")
+    group_player.add_argument("--alice", "-A", action="store_true", help="Play as Alice")
+    group_player.add_argument("--bob", "-B", action="store_true", help="Play as Bob")
 
     group_move = parser.add_mutually_exclusive_group(required=False)
     group_move.add_argument("--rock", action="store_true", help="Play Rock")
