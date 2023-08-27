@@ -14,6 +14,9 @@ from utils import wait_for_output, wait_for_spending_tx
 CCV_FLAG_CHECK_INPUT: int = 1
 CCV_FLAG_IGNORE_OUTPUT_AMOUNT: int = 2
 
+# point with provably unknown private key
+NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
+
 
 def vch2bn(s: bytes) -> int:
     """Convert bitcoin-specific little endian format to number."""
@@ -72,7 +75,7 @@ ArgSpecs = list[tuple[str, StandardType]]
 # Other types of generic treatable clauses could be defined (for example, a MiniscriptClause).
 # Moreover, it specifies a function that converts the arguments of the clause, to the data of the next output.
 class StandardClause(Clause):
-    def __init__(self, name: str, script: CScript, arg_specs: ArgSpecs, next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction] | None):
+    def __init__(self, name: str, script: CScript, arg_specs: ArgSpecs, next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction] | None = None):
         super().__init__(name, script)
         self.arg_specs = arg_specs
 
@@ -95,7 +98,8 @@ class StandardClause(Clause):
                 raise ValueError(f"Missing argument: {arg_name}")
             arg_value = args[arg_name]
             if type(arg_value) != arg_cls:
-                raise ValueError(f"Argument {arg_name} must be of type {arg_cls.__name__}, not {type(arg_value).__name__}")
+                raise ValueError(
+                    f"Argument {arg_name} must be of type {arg_cls.__name__}, not {type(arg_value).__name__}")
             if arg_cls == int:
                 result.append(script.bn2vch(arg_value))
             elif arg_cls == bytes:
@@ -133,6 +137,9 @@ class P2TR(AbstractContract):
 
     def get_tr_info(self) -> TaprootInfo:
         return self.tr_info
+
+    def get_address(self) -> str:
+        return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
 
 
 class AugmentedP2TR(AbstractContract):
@@ -257,7 +264,7 @@ class ContractInstance:
 
 
 class ContractManager:
-    def __init__(self, contract_instances: list[StandardP2TR | StandardAugmentedP2TR], rpc: AuthServiceProxy, *, mine_automatically=False):
+    def __init__(self, contract_instances: list[ContractInstance], rpc: AuthServiceProxy, *, mine_automatically=False):
         self.instances = contract_instances
         self.mine_automatically = mine_automatically
         self.rpc = rpc
@@ -274,14 +281,16 @@ class ContractManager:
         if instance not in self.instances:
             raise ValueError("Instance not in this manager")
 
-    def wait_for_outpoint(self, instance: ContractInstance):
+    def wait_for_outpoint(self, instance: ContractInstance, txid: str | None = None):
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.ABSTRACT)
         if instance.is_augm():
             if instance.data is None:
                 raise ValueError("Data not set in instance")
-            instance.outpoint, instance.last_height = wait_for_output(self.rpc, instance.contract.get_tr_info(self.data).scriptPubKey)
+            scriptPubKey = instance.contract.get_tr_info(self.data).scriptPubKey
         else:
-            instance.outpoint, instance.last_height = wait_for_output(self.rpc, instance.contract.get_tr_info().scriptPubKey)
+            scriptPubKey = instance.contract.get_tr_info().scriptPubKey
+
+        instance.outpoint, instance.last_height = wait_for_output(self.rpc, scriptPubKey, txid=txid)
 
         funding_tx_raw = self.rpc.getrawtransaction(instance.outpoint.hash.to_bytes(32, byteorder="big").hex())
         funding_tx = CTransaction()
@@ -349,6 +358,81 @@ class ContractManager:
 
         return tx, sighash
 
+    def get_multi_spend_tx(
+            self,
+            spends: list[tuple[ContractInstance, str, dict]]) -> tuple[CTransaction, list[ContractInstance], list[bytes]]:
+
+        tx = CTransaction()
+        tx.nVersion = 2
+        outputs_map: dict[int, CTxOut] = {}
+        outputs_instances: dict[int, ContractInstance] = {}
+
+        tx.vin = [CTxIn(outpoint=instance.outpoint) for instance, _, _ in spends]
+
+        for input_index, (instance, clause_name, args) in enumerate(spends):
+            clause_idx = next((i for i, clause in enumerate(instance.contract.clauses)
+                              if clause.name == clause_name), None)
+            if clause_idx is None:
+                raise ValueError(f"Clause {clause_name} not found")
+            clause = instance.contract.clauses[clause_idx]
+
+            next_outputs = clause.next_outputs(args)
+            if isinstance(next_outputs, CTransaction):
+                raise ValueError("CTV clauses are not supported for multi_spend")
+            else:
+                for i, clause_output in enumerate(next_outputs):
+
+                    out_contract = clause_output.next_contract
+                    if isinstance(out_contract, P2TR):
+                        out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
+                    elif isinstance(out_contract, AugmentedP2TR):
+                        if clause_output.next_data is None:
+                            raise ValueError("Missing data for augmented output")
+                        out_scriptPubKey = out_contract.get_tr_info(clause_output.next_data).scriptPubKey
+                    else:
+                        raise ValueError("Unsupported contract type")
+
+                    if i in outputs_map:
+                        if outputs_map[i].scriptPubKey != out_scriptPubKey:
+                            raise ValueError(
+                                f"Clashing output script for output {i}: specifications for input {input_index} don't match a previous one")
+                    else:
+                        outputs_map[i] = CTxOut(0, out_scriptPubKey)
+                        outputs_instances[i] = ContractInstance(out_contract)
+
+                    if clause_output.next_amount != ClauseOutputAmountBehavior.PRESERVE_OUTPUT:
+                        raise ValueError("Output template not preserving the output amount is not supported")
+                    else:
+                        outputs_map[i].nValue += instance.funding_tx.vout[instance.outpoint.n].nValue
+
+        if set(outputs_map.keys()) != set(range(len(outputs_map))):
+            raise ValueError("Some outputs are not correctly specified")
+        n_outputs = len(outputs_map)
+        tx.vout = [outputs_map[i] for i in range(n_outputs)]
+
+        # TODO: generalize for keypath spend?
+        sighashes: list[bytes] = []
+        spent_utxos = []
+
+        # TODO: simplify
+        for input_index in range(len(tx.vin)):
+            instance = spends[input_index][0]
+            spent_utxos.append(instance.funding_tx.vout[instance.outpoint.n]),
+
+        for input_index in range(len(tx.vin)):
+            instance = spends[input_index][0]
+            clause_name = spends[input_index][1]
+
+            sighashes.append(script.TaprootSignatureHash(
+                tx,
+                spent_utxos,
+                input_index=input_index,
+                hash_type=0,
+                scriptpath=True,
+                script=instance.get_tr_info().leaves[clause_name].script
+            ))
+        return tx, [outputs_instances[i] for i in range(n_outputs)], sighashes
+
     # args is the same, but it includes witness args (e.g. signatures)
     def get_spend_wit(self, instance: ContractInstance, clause_name: str, wargs: dict) -> CTxInWitness:
         clause_idx = next((i for i, clause in enumerate(instance.contract.clauses) if clause.name == clause_name), None)
@@ -375,6 +459,20 @@ class ContractManager:
 
         return self.wait_for_spend(instance)
 
+    def spend_multi_and_wait(self, instances: list[ContractInstance], tx: CTransaction) -> list[ContractInstance]:
+        cur_height = self.rpc.getblockcount()
+        for instance in instances:
+            self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
+            instance.last_height = cur_height
+
+        print(tx)
+        print(tx.serialize().hex())
+        self.rpc.sendrawtransaction(tx.serialize().hex())
+
+        if self.mine_automatically:
+            subprocess.run(["bitcoin-cli", "-regtest", "-generate", "1"], capture_output=True, text=True)
+        return self.wait_for_spend_multi(instances)
+
     def wait_for_spend(self, instance: ContractInstance) -> list[ContractInstance]:
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
 
@@ -393,13 +491,16 @@ class ContractManager:
 
         # TODO: simplify
         if isinstance(instance.contract, StandardP2TR):
-            instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(in_wit.scriptWitness.stack)
+            instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
+                in_wit.scriptWitness.stack)
         elif isinstance(instance.contract, StandardAugmentedP2TR):
-            instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(instance.data, in_wit.scriptWitness.stack)
+            instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
+                instance.data, in_wit.scriptWitness.stack)
         else:
             raise ValueError("Unsupported contract")
 
-        clause_idx = next((i for i, clause in enumerate(instance.contract.clauses) if clause.name == instance.spending_clause), None)
+        clause_idx = next((i for i, clause in enumerate(instance.contract.clauses)
+                          if clause.name == instance.spending_clause), None)
         if clause_idx is None:
             raise ValueError(f"Clause {instance.spending_clause} not found")
         clause = instance.contract.clauses[clause_idx]
@@ -437,3 +538,76 @@ class ContractManager:
 
         instance.next = next_instances
         return next_instances
+
+    def wait_for_spend_multi(self, instances: list[ContractInstance]) -> list[ContractInstance]:
+        out_contracts: dict[int, ContractInstance] = {}
+
+        for instance in instances:
+            self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
+
+            tx, vin, instance.last_height = wait_for_spending_tx(
+                self.rpc,
+                instance.outpoint,
+                starting_height=instance.last_height
+            )
+            tx.rehash()
+
+            instance.spending_tx = tx
+            instance.spending_vin = vin
+            instance.status = ContractInstanceStatus.SPENT
+
+            # decode spend
+            in_wit: CTxInWitness = tx.wit.vtxinwit[vin]
+
+            # TODO: simplify
+            if isinstance(instance.contract, StandardP2TR):
+                instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
+                    in_wit.scriptWitness.stack)
+            elif isinstance(instance.contract, StandardAugmentedP2TR):
+                instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
+                    instance.data, in_wit.scriptWitness.stack)
+            else:
+                raise ValueError("Unsupported contract")
+
+            clause_idx = next((i for i, clause in enumerate(instance.contract.clauses)
+                              if clause.name == instance.spending_clause), None)
+            if clause_idx is None:
+                raise ValueError(f"Clause {instance.spending_clause} not found")
+            clause = instance.contract.clauses[clause_idx]
+
+            next_outputs = clause.next_outputs(instance.spending_args)
+
+            if isinstance(next_outputs, CTransaction):
+                # For now, we assume CTV clauses are terminal;
+                # this might be generalized in the future
+                pass
+            else:
+                for i, clause_output in enumerate(next_outputs):
+                    assert clause_output.n == i  # for now, we only accept templates where all the outputs are described
+
+                    if i in out_contracts:
+                        continue  # output already specified by another input
+
+                    out_contract = clause_output.next_contract
+                    new_instance = ContractInstance(out_contract)
+
+                    if isinstance(out_contract, StandardP2TR):
+                        pass  # nothing to do
+                    elif isinstance(out_contract, StandardAugmentedP2TR):
+                        if clause_output.next_data is None:
+                            raise ValueError("Missing data for augmented output")
+                        new_instance.data = clause_output.next_data
+                    else:
+                        raise ValueError("Unsupported contract type")
+
+                    new_instance.last_height = instance.last_height
+
+                    new_instance.outpoint = COutPoint(int(tx.hash, 16), i)
+                    new_instance.funding_tx = tx
+                    new_instance.status = ContractInstanceStatus.FUNDED
+
+                    out_contracts[i] = new_instance
+
+        result = list(out_contracts.values())
+        self.instances.extend(result)  # TODO: add method to add an instance to Manager
+        return result

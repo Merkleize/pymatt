@@ -1,10 +1,6 @@
 from btctools.messages import CTransaction, CTxIn, CTxOut, sha256
 from btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
-from matt import CCV_FLAG_CHECK_INPUT, P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
-
-
-# point with provably unknown private key
-NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
+from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
 STAKE: int = 1000  # amount of sats that the players bet
 

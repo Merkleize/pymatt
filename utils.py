@@ -8,7 +8,14 @@ from btctools.messages import COutPoint, CTransaction
 
 # We ignore the possibility of reorgs for simplicity.
 
-def wait_for_output(rpc_connection: AuthServiceProxy, script_pub_key: bytes, poll_interval=1, starting_height: Optional[int] = None) -> Tuple[COutPoint, int]:
+def wait_for_output(
+    rpc_connection: AuthServiceProxy,
+    script_pub_key: bytes,
+    poll_interval=1,
+    starting_height: Optional[int] = None,
+    txid: Optional[str] = None,
+    min_amount: Optional[int] = None
+) -> Tuple[COutPoint, int]:
     # Initialize the last block height using the provided starting_height or the current block height
     last_block_height = max(starting_height - 1, 0) if starting_height is not None else rpc_connection.getblockcount()
 
@@ -26,8 +33,16 @@ def wait_for_output(rpc_connection: AuthServiceProxy, script_pub_key: bytes, pol
 
             # Check all transactions in the block
             for tx in block["tx"]:
+                # If txid is provided, ensure the current transaction matches it
+                if txid and tx["txid"] != txid:
+                    continue
+
                 # Check all outputs in the transaction
                 for vout_index, vout in enumerate(tx["vout"]):
+                    # Ensure the amount is above the min_amount if it is provided
+                    if min_amount and vout["value"] < min_amount:
+                        continue
+
                     if vout["scriptPubKey"]["hex"] == script_pub_key.hex():
                         return COutPoint(int(tx["txid"], 16), vout_index), last_block_height
 

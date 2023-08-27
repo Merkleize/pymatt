@@ -43,7 +43,6 @@ import json
 import hashlib
 import random
 import os
-import subprocess
 
 from dotenv import load_dotenv
 from btctools.auth_proxy import AuthServiceProxy
@@ -51,12 +50,10 @@ from btctools.auth_proxy import AuthServiceProxy
 import btctools.key as key
 from btctools.messages import sha256
 import btctools.script as script
+from environment import Environment
 from matt import ContractInstance, ContractManager
 
 from rps_contracts import RPSGameS0
-
-# point with provably unknown private key
-NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
 
 STAKE: int = 1000  # amount of sats that the players bet
 
@@ -99,25 +96,12 @@ class RPS:
         return m.digest()
 
 
-class Player:
-    def __init__(self, args: argparse.Namespace):
+class AliceGame:
+    def __init__(self, env: Environment, args: dict):
+        self.env = env
         self.args = args
 
-    def get_rpc(self) -> AuthServiceProxy:
-        return AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
-
-    def prompt(self, message: str | None = None):
-        if message is not None:
-            print(message)
-        if not self.args.non_interactive:
-            print("Press Enter to continue...")
-            input()
-
-
-class AliceGame(Player):
-    def __init__(self, args: argparse.Namespace):
-        super().__init__(args)
-
+        # TODO: use tprv
         self.priv_key = key.ExtendedKey.deserialize("xprv9s21ZrQH143K27gyeEkz5fzM5q8bZpsu6erWk7BsseLKiQCUajwLYcuuzfix8SjH2KKBMGRRgaVg6W9HEnZZtARcqrTcbh2aM49ECCtcvq7")
 
     def start_session(self, m_a: int):
@@ -134,7 +118,7 @@ class AliceGame(Player):
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((self.args.host, self.args.port))
+        s.bind((self.env.host, self.env.port))
         s.listen(1)
         conn, _ = s.accept()
 
@@ -147,16 +131,14 @@ class AliceGame(Player):
         pk_b = bytes.fromhex(bob_msg['pk_b'])
         print(f"Alice's state: m_a={m_a}, r_a={r_a.hex()}, c_a={c_a.hex()}, pk_a={pk_a.hex()}, pk_b={pk_b.hex()}")
 
+        M = self.env.manager
+
         # Create initial smart contract UTXO
         S0 = RPSGameS0(pk_a, pk_b, c_a)
-
-        rpc = self.get_rpc()
-
         C = ContractInstance(S0)
+        M.instances.append(C)  # TODO: add proper method to ContractManager
 
         print(f"Alice waiting for output: {C.get_address()}")
-
-        M = ContractManager([C], rpc, mine_automatically=self.args.mine_automatically)
 
         M.wait_for_outpoint(C)
 
@@ -184,17 +166,19 @@ class AliceGame(Player):
         tx_payout, _ = M.get_spend_tx(C2, outcome, args)
         tx_payout.wit.vtxinwit = [M.get_spend_wit(C2, outcome, args)]
 
-        self.prompt("Broadcasting adjudication transaction")
+        self.env.prompt("Broadcasting adjudication transaction")
 
         M.spend_and_wait(C2, tx_payout)
 
         s.close()
 
 
-class BobGame(Player):
-    def __init__(self, args: argparse.Namespace):
-        super().__init__(args)
+class BobGame:
+    def __init__(self, env: Environment, args: dict):
+        self.env = env
+        self.args = args
 
+        # TODO: use tprv
         self.priv_key = key.ExtendedKey.deserialize("xprv9s21ZrQH143K2a274KJPXNa1tzYfv68f1CqcTY1CAnHistRD9s1N34w3GRx5GbBv2jJpDsdDy49Zd8wEDwT9t5DRyzZjtoaCqcoHY1pjTsJ")
 
     def join_session(self, m_b: int):
@@ -202,7 +186,7 @@ class BobGame(Player):
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.connect((self.args.host, self.args.port))
+        s.connect((self.env.host, self.env.port))
 
         alice_message = json.loads(s.recv(1024).decode())
 
@@ -218,8 +202,7 @@ class BobGame(Player):
 
         S0 = RPSGameS0(pk_a, pk_b, c_a)
         C = ContractInstance(S0)
-
-        rpc = self.get_rpc()
+        M = self.env.manager
 
         print(f"Bob waiting for output: {C.get_address()}")
 
@@ -240,7 +223,7 @@ class BobGame(Player):
 
         tx.wit.vtxinwit = [M.get_spend_wit(C, "bob_move", {'m_b': m_b, 'bob_sig': bob_sig})]
 
-        self.prompt("Broadcasting Bob's move transaction")
+        self.env.prompt("Broadcasting Bob's move transaction")
 
         [C2] = M.spend_and_wait(C, tx)
 
@@ -272,6 +255,9 @@ if __name__ == "__main__":
     group_move.add_argument("--paper", action="store_true", help="Play Paper")
     group_move.add_argument("--scissors", action="store_true", help="Play Scissors")
 
+    # Move option
+    parser.add_argument("--move", default="localhost", type=str, help="Host address (default: localhost)")
+
     # Non-interactive option
     parser.add_argument("--non-interactive", "-n", action="store_true", help="Run in non-interactive mode")
 
@@ -284,9 +270,6 @@ if __name__ == "__main__":
     # Port option
     parser.add_argument("--port", default=12345, type=int, help="Port number (default: 12345)")
 
-    # Host option
-    parser.add_argument("--move", default="localhost", type=str, help="Host address (default: localhost)")
-
     args = parser.parse_args()
 
     move = None
@@ -297,11 +280,16 @@ if __name__ == "__main__":
     elif args.scissors:
         move = 2
 
+    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
+
+    manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
+    environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)
+
     if args.alice:
-        a = AliceGame(args)
+        a = AliceGame(environment, args)
         m_a = move if move is not None else random.SystemRandom().randint(0, 2)
         a.start_session(m_a)
     else:
-        b = BobGame(args)
+        b = BobGame(environment, args)
         m_b = move if move is not None else random.SystemRandom().randint(0, 2)
         b.join_session(m_b)
