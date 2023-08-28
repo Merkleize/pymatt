@@ -46,6 +46,9 @@ class ClauseOutput:
     next_data: None | bytes = None  # only meaningful if c is augmented
     next_amount: ClauseOutputAmountBehavior = ClauseOutputAmountBehavior.PRESERVE_OUTPUT
 
+    def __repr__(self):
+        return f"ClauseOutput(n={self.n}, next_contract={self.next_contract}, next_data={self.next_data}, next_amount={self.next_amount})"
+
 
 class Clause:
     def __init__(self, name: str, script: CScript):
@@ -60,6 +63,9 @@ class Clause:
 
     def args_from_stack_elements(self, elements: list[bytes]) -> dict:
         raise NotImplementedError
+
+    def __repr__(self):
+        return f"<Clause(name={self.name}, script={self.script})>"
 
 
 StandardType = type[int] | type[bytes]
@@ -121,6 +127,9 @@ class StandardClause(Clause):
                 raise ValueError("Unexpected type")  # this should never happen
         return result
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name={self.name}, script={self.script.hex()}, arg_specs={self.arg_specs}, next_output_fn={self.next_outputs_fn})"
+
 
 class OpaqueP2TR(AbstractContract):
     """
@@ -142,6 +151,9 @@ class OpaqueP2TR(AbstractContract):
     def get_address(self) -> str:
         return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(pubkey={self.pubkey.hex()})"
+
 
 class P2TR(AbstractContract):
     """
@@ -160,6 +172,9 @@ class P2TR(AbstractContract):
 
     def get_address(self) -> str:
         return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()}, scripts={self.scripts})"
 
 
 class AugmentedP2TR(AbstractContract):
@@ -188,6 +203,9 @@ class AugmentedP2TR(AbstractContract):
 
         return script.taproot_construct(internal_pubkey, self.get_scripts())
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()})"
+
 
 class StandardP2TR(P2TR):
     """
@@ -215,6 +233,9 @@ class StandardP2TR(P2TR):
 
         return clause_name, self._clauses_dict[clause_name].args_from_stack_elements(stack_elems[:-2])
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()}, clauses={self.clauses})"
+
 
 class StandardAugmentedP2TR(AugmentedP2TR):
     """
@@ -241,6 +262,9 @@ class StandardAugmentedP2TR(AugmentedP2TR):
             raise ValueError("Clause not found")
 
         return clause_name, self._clauses_dict[clause_name].args_from_stack_elements(stack_elems[:-2])
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()}, clauses={self.clauses})"
 
 
 class ContractInstanceStatus(Enum):
@@ -287,6 +311,9 @@ class ContractInstance:
             return self.contract.decode_wit_stack(self.data, stack_elems)
         else:
             return self.contract.decode_wit_stack(stack_elems)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(contract={self.contract}, data={self.data}, status={self.status}, outpoint={self.outpoint})"
 
 
 class ContractManager:
