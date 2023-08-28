@@ -99,8 +99,7 @@ class AliceGame:
         self.env = env
         self.args = args
 
-        # TODO: use tprv
-        self.priv_key = key.ExtendedKey.deserialize("xprv9s21ZrQH143K27gyeEkz5fzM5q8bZpsu6erWk7BsseLKiQCUajwLYcuuzfix8SjH2KKBMGRRgaVg6W9HEnZZtARcqrTcbh2aM49ECCtcvq7")
+        self.priv_key = key.ExtendedKey.deserialize("tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
 
     def start_session(self, m_a: int):
         assert 0 <= m_a <= 2
@@ -179,8 +178,7 @@ class BobGame:
         self.env = env
         self.args = args
 
-        # TODO: use tprv
-        self.priv_key = key.ExtendedKey.deserialize("xprv9s21ZrQH143K2a274KJPXNa1tzYfv68f1CqcTY1CAnHistRD9s1N34w3GRx5GbBv2jJpDsdDy49Zd8wEDwT9t5DRyzZjtoaCqcoHY1pjTsJ")
+        self.priv_key = key.ExtendedKey.deserialize("tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
     def join_session(self, m_b: int):
         assert 0 <= m_b <= 2
@@ -204,10 +202,9 @@ class BobGame:
         S0 = RPSGameS0(pk_a, pk_b, c_a)
         C = ContractInstance(S0)
         M = self.env.manager
+        M.instances.append(C)
 
         print(f"Bob waiting for output: {C.get_address()}")
-
-        M = ContractManager([C], rpc, mine_automatically=self.args.mine_automatically)
 
         M.wait_for_outpoint(C)
 

@@ -89,7 +89,7 @@ class RPSGameS1(StandardAugmentedP2TR):
 
                 OP_SHA256,  # data: sha256(m_b)
                 -1,  # index: current input's index
-                0,   # NUMS pubkey (TODO: can we use -1?)
+                0,   # NUMS pubkey
                 -1,  # taptree: current input's taptree
                 CCV_FLAG_CHECK_INPUT,  # flags
                 OP_CHECKCONTRACTVERIFY,
