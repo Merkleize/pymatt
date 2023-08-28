@@ -1,5 +1,5 @@
 from btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DROP, OP_DUP, OP_SWAP, OP_TRUE, CScript
-from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, ClauseOutput, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
 
 class Vault(StandardP2TR):
@@ -47,7 +47,8 @@ class Vault(StandardP2TR):
             ]),
             arg_specs=[
                 ('out_i', int),
-            ]
+            ],
+            next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
         super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [trigger, recover])
@@ -63,7 +64,7 @@ class Unvaulting(StandardAugmentedP2TR):
 
         # witness: <ctv_hash>
         withdrawal = StandardClause(
-            name="withdrawal",
+            name="withdraw",
             script=CScript([
                 OP_DUP,
 
@@ -103,7 +104,8 @@ class Unvaulting(StandardAugmentedP2TR):
             ]),
             arg_specs=[
                 ('out_i', int),
-            ]
+            ],
+            next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
         super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [withdrawal, recover])

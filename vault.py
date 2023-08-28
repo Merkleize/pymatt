@@ -22,7 +22,7 @@ import btctools.key as key
 from environment import Environment
 from matt import ContractInstance, ContractInstanceStatus, ContractManager
 
-from vault_contracts import Vault
+from vault_contracts import Unvaulting, Vault
 
 logging.basicConfig(filename='matt-cli.log', level=logging.DEBUG)
 
@@ -31,6 +31,7 @@ class ActionArgumentCompleter(Completer):
     ACTION_ARGUMENTS = {
         "fund": ["amount="],
         "list": [],
+        "recover": ["item="],
         "trigger": ["items=\"[", "ctvhash="],
     }
 
@@ -78,7 +79,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions = ["fund", "list", "trigger"]
+    actions = ["fund", "list", "recover", "trigger"]
 
     completer = ActionArgumentCompleter()
     # Create a history object
@@ -136,8 +137,7 @@ if __name__ == "__main__":
                 if not isinstance(items_idx, list) or len(set(items_idx)) != len(items_idx):
                     raise ValueError("Invalid items")
 
-                # TODO: rename, they are contracts
-                spending_outputs: list[ContractInstance] = []
+                spending_vaults: list[ContractInstance] = []
                 for idx in items_idx:
                     if idx >= len(manager.instances):
                         raise ValueError(f"No such instance: {idx}")
@@ -147,18 +147,20 @@ if __name__ == "__main__":
                     if not isinstance(instance.contract, Vault):
                         raise ValueError("Only Vault instances can be triggered")
 
-                    spending_outputs.append(manager.instances[idx])
+                    spending_vaults.append(manager.instances[idx])
 
+                # TODO: construct a real template
                 ctv_hash = bytes.fromhex("e2ab7eb8891e05e9c37097847f6a2299f269d721167251d81e0301e0a3a0bb16")
+
                 spend_tx, sighashes = manager.get_spend_tx(
-                    [(out, "trigger", {"out_i": 0, "ctv_hash": ctv_hash}) for out in spending_outputs]
+                    [(out, "trigger", {"out_i": 0, "ctv_hash": ctv_hash}) for out in spending_vaults]
                 )
                 print(spend_tx)
                 print(sighashes)
 
                 sigs = [key.sign_schnorr(unvault_priv_key.privkey, sighash) for sighash in sighashes]
                 spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-                    spending_outputs[i],
+                    spending_vaults[i],
                     "trigger",
                     {"out_i": 0, "ctv_hash": ctv_hash, "sig": sigs[i]}
                 )
@@ -166,8 +168,32 @@ if __name__ == "__main__":
                 ]
 
                 print("Waiting for trigger transaction to be confirmed...")
-                result = manager.spend_and_wait(spending_outputs, spend_tx)
+                result = manager.spend_and_wait(spending_vaults, spend_tx)
                 print("Done")
+
+            elif action == "recover":
+                item_idx = int(args_dict["item"])
+                instance = manager.instances[item_idx]
+                if instance.status != ContractInstanceStatus.FUNDED:
+                    raise ValueError("Only FUNDED instances can be recovered")
+                if not isinstance(instance.contract, (Vault, Unvaulting)):
+                    raise ValueError("Only Vault or Unvaulting instances can be recovered")
+
+                # TODO: this does not fill the vout. Need to generalize the framework slightly
+                spend_tx, _ = manager.get_spend_tx((instance, "recover", {"out_i": 0}))
+
+                spend_tx.wit.vtxinwit = [manager.get_spend_wit(
+                    instance,
+                    "recover",
+                    {"out_i": 0}
+                )]
+
+                print("Waiting for recover transaction to be confirmed...")
+                print(spend_tx)
+                result = manager.spend_and_wait(instance, spend_tx)
+                print("Done")
+
+                pass
 
             elif action == "fund":
                 amount = int(args_dict["amount"])

@@ -5,7 +5,7 @@ from typing import Callable
 from btctools import script, key
 from btctools.auth_proxy import AuthServiceProxy
 from btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness
-from btctools.script import CScript, CTxOut, TaprootInfo
+from btctools.script import OP_1, CScript, CTxOut, TaprootInfo
 from btctools.segwit_addr import encode_segwit_address
 from utils import wait_for_output, wait_for_spending_tx
 
@@ -43,7 +43,7 @@ class ClauseOutputAmountBehavior(Enum):
 class ClauseOutput:
     n: None | int
     next_contract: AbstractContract  # only StandardP2TR and StandardAugmentedP2TR are supported so far
-    next_data: None | bytes  # only meaningful if c is augmented
+    next_data: None | bytes = None  # only meaningful if c is augmented
     next_amount: ClauseOutputAmountBehavior = ClauseOutputAmountBehavior.PRESERVE_OUTPUT
 
 
@@ -120,6 +120,27 @@ class StandardClause(Clause):
             else:
                 raise ValueError("Unexpected type")  # this should never happen
         return result
+
+
+class OpaqueP2TR(AbstractContract):
+    """
+    A class representing a Pay-to-Taproot script, where only the final pubkey is known.
+    """
+
+    def __init__(self, pubkey: bytes):
+        assert len(pubkey) == 32
+
+        self.pubkey = pubkey
+        # Skip the tweak if there are no scripts
+        # Note that this is different than BIP-86, where the key is tweaked with an unspendable script tree hash
+        # TODO: should we put this into a separate BareP2TR class, instead?
+        self.tr_info = TaprootInfo(CScript([OP_1, pubkey]), pubkey, None, None, {}, None, pubkey, 0)
+
+    def get_tr_info(self) -> TaprootInfo:
+        return self.tr_info
+
+    def get_address(self) -> str:
+        return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
 
 
 class P2TR(AbstractContract):
@@ -309,7 +330,9 @@ class ContractManager:
 
     def get_spend_tx(
             self,
-            spends: list[tuple[ContractInstance, str, dict]]) -> tuple[CTransaction, list[bytes]]:
+            spends: tuple[ContractInstance, str, dict] | list[tuple[ContractInstance, str, dict]]) -> tuple[CTransaction, list[bytes]]:
+        if not isinstance(spends, list):
+            spends = [spends]
 
         tx = CTransaction()
         tx.nVersion = 2
@@ -336,9 +359,8 @@ class ContractManager:
                 has_ctv_clause = True
             else:
                 for i, clause_output in enumerate(next_outputs):
-
                     out_contract = clause_output.next_contract
-                    if isinstance(out_contract, P2TR):
+                    if isinstance(out_contract, (P2TR, OpaqueP2TR)):
                         out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
                     elif isinstance(out_contract, AugmentedP2TR):
                         if clause_output.next_data is None:
@@ -454,6 +476,8 @@ class ContractManager:
 
             next_outputs = clause.next_outputs(instance.spending_args)
 
+            # We go through all the outputs produced by spending this transaction,
+            # and add them to the manager if they are standard
             if isinstance(next_outputs, CTransaction):
                 # For now, we assume CTV clauses are terminal;
                 # this might be generalized in the future
@@ -468,8 +492,8 @@ class ContractManager:
                     out_contract = clause_output.next_contract
                     new_instance = ContractInstance(out_contract)
 
-                    if isinstance(out_contract, StandardP2TR):
-                        pass  # nothing to do
+                    if isinstance(out_contract, (P2TR, OpaqueP2TR, StandardP2TR)):
+                        continue  # nothing to do, will not track this output
                     elif isinstance(out_contract, StandardAugmentedP2TR):
                         if clause_output.next_data is None:
                             raise ValueError("Missing data for augmented output")
