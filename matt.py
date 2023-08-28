@@ -261,6 +261,12 @@ class ContractInstance:
     def get_address(self) -> str:
         return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
 
+    def decode_wit_stack(self, stack_elems: list[bytes]) -> tuple[str, dict]:
+        if self.is_augm():
+            return self.contract.decode_wit_stack(self.data, stack_elems)
+        else:
+            return self.contract.decode_wit_stack(stack_elems)
+
 
 class ContractManager:
     def __init__(self, contract_instances: list[ContractInstance], rpc: AuthServiceProxy, *, mine_automatically=False):
@@ -438,15 +444,7 @@ class ContractManager:
             # decode spend
             in_wit: CTxInWitness = tx.wit.vtxinwit[vin]
 
-            # TODO: simplify
-            if isinstance(instance.contract, StandardP2TR):
-                instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
-                    in_wit.scriptWitness.stack)
-            elif isinstance(instance.contract, StandardAugmentedP2TR):
-                instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
-                    instance.data, in_wit.scriptWitness.stack)
-            else:
-                raise ValueError("Unsupported contract")
+            instance.spending_clause, instance.spending_args = instance.decode_wit_stack(in_wit.scriptWitness.stack)
 
             clause_idx = next((i for i, clause in enumerate(instance.contract.clauses)
                               if clause.name == instance.spending_clause), None)
