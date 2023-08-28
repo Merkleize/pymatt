@@ -53,9 +53,7 @@ import btctools.script as script
 from environment import Environment
 from matt import ContractInstance, ContractManager
 
-from rps_contracts import RPSGameS0
-
-STAKE: int = 1000  # amount of sats that the players bet
+from rps_contracts import DEFAULT_STAKE, RPSGameS0
 
 
 load_dotenv()
@@ -138,8 +136,11 @@ class AliceGame:
         C = ContractInstance(S0)
         M.instances.append(C)  # TODO: add proper method to ContractManager
 
-        print(f"Alice waiting for output: {C.get_address()}")
+        if self.args.mine_automatically:
+            print("Broadcasting funding transaction")
+            environment.rpc.sendtoaddress(C.get_address(), 2 * DEFAULT_STAKE / 100_000_000)
 
+        print(f"Alice waiting for output: {C.get_address()}")
         M.wait_for_outpoint(C)
 
         # Wait for bob to spend it
