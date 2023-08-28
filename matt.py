@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-import subprocess
 from typing import Callable
 from btctools import script, key
 from btctools.auth_proxy import AuthServiceProxy
@@ -290,6 +289,9 @@ class ContractManager:
         else:
             scriptPubKey = instance.contract.get_tr_info().scriptPubKey
 
+        if self.mine_automatically:
+            self._mine_blocks(1)
+
         instance.outpoint, instance.last_height = wait_for_output(self.rpc, scriptPubKey, txid=txid)
 
         funding_tx_raw = self.rpc.getrawtransaction(instance.outpoint.hash.to_bytes(32, byteorder="big").hex())
@@ -448,6 +450,10 @@ class ContractManager:
         ]
         return in_wit
 
+    def _mine_blocks(self, n_blocks: int = 1):
+        address = self.rpc.getnewaddress()
+        self.rpc.generatetoaddress(n_blocks, address)
+
     def spend_and_wait(self, instance: ContractInstance, tx: CTransaction) -> list[ContractInstance]:
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
 
@@ -455,7 +461,7 @@ class ContractManager:
         self.rpc.sendrawtransaction(tx.serialize().hex())
 
         if self.mine_automatically:
-            subprocess.run(["bitcoin-cli", "-regtest", "-generate", "1"], capture_output=True, text=True)
+            self._mine_blocks(1)
 
         return self.wait_for_spend(instance)
 
@@ -470,7 +476,7 @@ class ContractManager:
         self.rpc.sendrawtransaction(tx.serialize().hex())
 
         if self.mine_automatically:
-            subprocess.run(["bitcoin-cli", "-regtest", "-generate", "1"], capture_output=True, text=True)
+            self._mine_blocks(1)
         return self.wait_for_spend_multi(instances)
 
     def wait_for_spend(self, instance: ContractInstance) -> list[ContractInstance]:
