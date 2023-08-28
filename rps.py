@@ -163,7 +163,7 @@ class AliceGame:
             "m_b": m_b,
             "r_a": r_a,
         }
-        tx_payout, _ = M.get_spend_tx(C2, outcome, args)
+        tx_payout, _ = M.get_spend_tx([(C2, outcome, args)])
         tx_payout.wit.vtxinwit = [M.get_spend_wit(C2, outcome, args)]
 
         self.env.prompt("Broadcasting adjudication transaction")
@@ -217,7 +217,7 @@ class BobGame:
         print(f"Bob's move: {m_b} ({RPS.move_str(m_b)})")
         print(f"Bob's move's hash: {m_b_hash.hex()}")
 
-        tx, sighash = M.get_spend_tx(C, "bob_move", {'m_b': m_b})
+        tx, [sighash] = M.get_spend_tx([(C, "bob_move", {'m_b': m_b})])
 
         bob_sig = key.sign_schnorr(self.priv_key.privkey, sighash)
 
@@ -225,7 +225,7 @@ class BobGame:
 
         self.env.prompt("Broadcasting Bob's move transaction")
 
-        [C2] = M.spend_and_wait(C, tx)
+        [C2] = M.spend_and_wait([C], tx)
 
         txid = C.spending_tx.hash
         print(f"Bob's move broadcasted: {m_b}. txid: {txid}")

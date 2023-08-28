@@ -301,75 +301,17 @@ class ContractManager:
 
         instance.status = ContractInstanceStatus.FUNDED
 
-    def get_spend_tx(self, instance: ContractInstance, clause_name: str, args: dict) -> tuple[CTransaction, bytes]:
-        # TODO: generalize this. For now, we assume that spend is on the first input
-        input_index = 0
-
-        clause_idx = next((i for i, clause in enumerate(instance.contract.clauses) if clause.name == clause_name), None)
-        if clause_idx is None:
-            raise ValueError(f"Clause {clause_name} not found")
-        clause = instance.contract.clauses[clause_idx]
-
-        next_outputs = clause.next_outputs(args)
-        if isinstance(next_outputs, CTransaction):
-            # Use directly the CTV template, only change the prevout
-            tx = next_outputs
-
-            assert len(tx.vin) == 1
-
-            tx.vin[input_index].prevout = instance.outpoint
-        else:
-            tx = CTransaction()
-            tx.nVersion = 2
-            tx.vin = [CTxIn(outpoint=instance.outpoint)]
-
-            tx.vout = []
-            for i, clause_output in enumerate(next_outputs):
-                assert clause_output.n == i  # for now, we only accept templates where all the outputs are described
-                out_contract = clause_output.next_contract
-                if isinstance(out_contract, P2TR):
-                    out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
-                elif isinstance(out_contract, AugmentedP2TR):
-                    if clause_output.next_data is None:
-                        raise ValueError("Missing data for augmented output")
-                    out_scriptPubKey = out_contract.get_tr_info(clause_output.next_data).scriptPubKey
-                else:
-                    raise ValueError("Unsupported contract type")
-
-                if clause_output.next_amount != ClauseOutputAmountBehavior.PRESERVE_OUTPUT:
-                    raise ValueError("Output template not preserving the output amount is not supported")
-
-                # Here we assume that the output amount must be preserved
-                input_value = instance.funding_tx.vout[instance.outpoint.n].nValue
-                tx.vout.append(
-                    CTxOut(
-                        nValue=input_value,
-                        scriptPubKey=out_scriptPubKey
-                    )
-                )
-
-        # TODO: generalize for keypath spend?
-        sighash = script.TaprootSignatureHash(
-            tx,
-            [instance.funding_tx.vout[instance.outpoint.n]],
-            input_index=input_index,
-            hash_type=0,
-            scriptpath=True,
-            script=instance.get_tr_info().leaves[clause_name].script
-        )
-
-        return tx, sighash
-
-    def get_multi_spend_tx(
+    def get_spend_tx(
             self,
-            spends: list[tuple[ContractInstance, str, dict]]) -> tuple[CTransaction, list[ContractInstance], list[bytes]]:
+            spends: list[tuple[ContractInstance, str, dict]]) -> tuple[CTransaction, list[bytes]]:
 
         tx = CTransaction()
         tx.nVersion = 2
         outputs_map: dict[int, CTxOut] = {}
-        outputs_instances: dict[int, ContractInstance] = {}
 
         tx.vin = [CTxIn(outpoint=instance.outpoint) for instance, _, _ in spends]
+
+        has_ctv_clause = False
 
         for input_index, (instance, clause_name, args) in enumerate(spends):
             clause_idx = next((i for i, clause in enumerate(instance.contract.clauses)
@@ -380,7 +322,12 @@ class ContractManager:
 
             next_outputs = clause.next_outputs(args)
             if isinstance(next_outputs, CTransaction):
-                raise ValueError("CTV clauses are not supported for multi_spend")
+                if len(tx.vin) != 1 or len(next_outputs.vin) != 1:
+                    raise ValueError("CTV clauses are only supported for single-input spends")  # TODO: generalize
+
+                tx.vin[0].nSequence = next_outputs.vin[0].nSequence
+                tx.vout = next_outputs.vout
+                has_ctv_clause = True
             else:
                 for i, clause_output in enumerate(next_outputs):
 
@@ -400,17 +347,16 @@ class ContractManager:
                                 f"Clashing output script for output {i}: specifications for input {input_index} don't match a previous one")
                     else:
                         outputs_map[i] = CTxOut(0, out_scriptPubKey)
-                        outputs_instances[i] = ContractInstance(out_contract)
 
                     if clause_output.next_amount != ClauseOutputAmountBehavior.PRESERVE_OUTPUT:
                         raise ValueError("Output template not preserving the output amount is not supported")
                     else:
                         outputs_map[i].nValue += instance.funding_tx.vout[instance.outpoint.n].nValue
 
-        if set(outputs_map.keys()) != set(range(len(outputs_map))):
-            raise ValueError("Some outputs are not correctly specified")
-        n_outputs = len(outputs_map)
-        tx.vout = [outputs_map[i] for i in range(n_outputs)]
+        if not has_ctv_clause:
+            if set(outputs_map.keys()) != set(range(len(outputs_map))):
+                raise ValueError("Some outputs are not correctly specified")
+            tx.vout = [outputs_map[i] for i in range(len(outputs_map))]
 
         # TODO: generalize for keypath spend?
         sighashes: list[bytes] = []
@@ -433,7 +379,7 @@ class ContractManager:
                 scriptpath=True,
                 script=instance.get_tr_info().leaves[clause_name].script
             ))
-        return tx, [outputs_instances[i] for i in range(n_outputs)], sighashes
+        return tx, sighashes
 
     # args is the same, but it includes witness args (e.g. signatures)
     def get_spend_wit(self, instance: ContractInstance, clause_name: str, wargs: dict) -> CTxInWitness:
@@ -454,98 +400,25 @@ class ContractManager:
         address = self.rpc.getnewaddress()
         self.rpc.generatetoaddress(n_blocks, address)
 
-    def spend_and_wait(self, instance: ContractInstance, tx: CTransaction) -> list[ContractInstance]:
-        self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
+    def spend_and_wait(self, instances: ContractInstance | list[ContractInstance], tx: CTransaction) -> list[ContractInstance]:
+        if isinstance(instances, ContractInstance):
+            instances = [instances]
 
-        instance.last_height = self.rpc.getblockcount()
-        self.rpc.sendrawtransaction(tx.serialize().hex())
-
-        if self.mine_automatically:
-            self._mine_blocks(1)
-
-        return self.wait_for_spend(instance)
-
-    def spend_multi_and_wait(self, instances: list[ContractInstance], tx: CTransaction) -> list[ContractInstance]:
         cur_height = self.rpc.getblockcount()
         for instance in instances:
             self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
             instance.last_height = cur_height
 
-        print(tx)
-        print(tx.serialize().hex())
         self.rpc.sendrawtransaction(tx.serialize().hex())
 
         if self.mine_automatically:
             self._mine_blocks(1)
-        return self.wait_for_spend_multi(instances)
+        return self.wait_for_spend(instances)
 
-    def wait_for_spend(self, instance: ContractInstance) -> list[ContractInstance]:
-        self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
+    def wait_for_spend(self, instances: ContractInstance | list[ContractInstance]) -> list[ContractInstance]:
+        if isinstance(instances, ContractInstance):
+            instances = [instances]
 
-        tx, vin, instance.last_height = wait_for_spending_tx(
-            self.rpc,
-            instance.outpoint,
-            starting_height=instance.last_height
-        )
-        tx.rehash()
-        instance.spending_tx = tx
-        instance.spending_vin = vin
-        instance.status = ContractInstanceStatus.SPENT
-
-        # decode spend
-        in_wit: CTxInWitness = tx.wit.vtxinwit[vin]
-
-        # TODO: simplify
-        if isinstance(instance.contract, StandardP2TR):
-            instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
-                in_wit.scriptWitness.stack)
-        elif isinstance(instance.contract, StandardAugmentedP2TR):
-            instance.spending_clause, instance.spending_args = instance.contract.decode_wit_stack(
-                instance.data, in_wit.scriptWitness.stack)
-        else:
-            raise ValueError("Unsupported contract")
-
-        clause_idx = next((i for i, clause in enumerate(instance.contract.clauses)
-                          if clause.name == instance.spending_clause), None)
-        if clause_idx is None:
-            raise ValueError(f"Clause {instance.spending_clause} not found")
-        clause = instance.contract.clauses[clause_idx]
-
-        next_instances = []
-        next_outputs = clause.next_outputs(instance.spending_args)
-
-        if isinstance(next_outputs, CTransaction):
-            # For now, we assume CTV clauses are terminal;
-            # this might be generalized in the future
-            pass
-        else:
-            for i, clause_output in enumerate(next_outputs):
-                assert clause_output.n == i  # for now, we only accept templates where all the outputs are described
-                out_contract = clause_output.next_contract
-                new_instance = ContractInstance(out_contract)
-
-                if isinstance(out_contract, StandardP2TR):
-                    pass  # nothing to do
-                elif isinstance(out_contract, StandardAugmentedP2TR):
-                    if clause_output.next_data is None:
-                        raise ValueError("Missing data for augmented output")
-                    new_instance.data = clause_output.next_data
-                else:
-                    raise ValueError("Unsupported contract type")
-
-                new_instance.last_height = instance.last_height
-
-                new_instance.outpoint = COutPoint(int(tx.hash, 16), i)
-                new_instance.funding_tx = tx
-                new_instance.status = ContractInstanceStatus.FUNDED
-
-                next_instances.append(new_instance)
-                self.instances.append(new_instance)  # TODO: add method to add an instance to Manager
-
-        instance.next = next_instances
-        return next_instances
-
-    def wait_for_spend_multi(self, instances: list[ContractInstance]) -> list[ContractInstance]:
         out_contracts: dict[int, ContractInstance] = {}
 
         for instance in instances:

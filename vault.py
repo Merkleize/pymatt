@@ -113,7 +113,6 @@ if __name__ == "__main__":
             if input_line_list:
                 action = input_line_list[0].strip()
             else:
-                print("Invalid command")
                 continue
 
             # Get the necessary arguments from input_command_list
@@ -151,7 +150,7 @@ if __name__ == "__main__":
                     spending_outputs.append(manager.instances[idx])
 
                 ctv_hash = bytes.fromhex("e2ab7eb8891e05e9c37097847f6a2299f269d721167251d81e0301e0a3a0bb16")
-                spend_tx, out_contracts, sighashes = manager.get_multi_spend_tx(
+                spend_tx, sighashes = manager.get_spend_tx(
                     [(out, "trigger", {"out_i": 0, "ctv_hash": ctv_hash}) for out in spending_outputs]
                 )
                 print(spend_tx)
@@ -167,8 +166,8 @@ if __name__ == "__main__":
                 ]
 
                 print("Waiting for trigger transaction to be confirmed...")
-                result = manager.spend_multi_and_wait(spending_outputs, spend_tx)
-                print(result)
+                result = manager.spend_and_wait(spending_outputs, spend_tx)
+                print("Done")
 
             elif action == "fund":
                 amount = int(args_dict["amount"])
