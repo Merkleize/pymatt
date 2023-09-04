@@ -55,7 +55,7 @@ class Vault(StandardP2TR):
 
 
 class Unvaulting(StandardAugmentedP2TR):
-    def __init__(self, alternate_pk: bytes, spend_delay: int, recover_pk: bytes):
+    def __init__(self, alternate_pk: bytes | None, spend_delay: int, recover_pk: bytes):
         assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32
 
         self.alternate_pk = alternate_pk
@@ -70,7 +70,7 @@ class Unvaulting(StandardAugmentedP2TR):
 
                 # check that the top of the stack is the embedded data
                 -1,  # index
-                -1,  # pk
+                0 if alternate_pk is None else alternate_pk,  # pk
                 -1,   # taptree
                 CCV_FLAG_CHECK_INPUT,
                 OP_CHECKCONTRACTVERIFY,
@@ -84,8 +84,6 @@ class Unvaulting(StandardAugmentedP2TR):
                 OP_CHECKTEMPLATEVERIFY
             ]),
             arg_specs=[
-                ('sig', bytes),
-                ('out_i', int),
                 ('ctv_hash', bytes)
             ]
         )

@@ -19,6 +19,8 @@ from prompt_toolkit.history import FileHistory
 from btctools.auth_proxy import AuthServiceProxy
 
 import btctools.key as key
+from btctools.messages import CTransaction, CTxIn, CTxOut
+from btctools.segwit_addr import decode_segwit_address
 from environment import Environment
 from matt import ContractInstance, ContractInstanceStatus, ContractManager
 
@@ -32,7 +34,8 @@ class ActionArgumentCompleter(Completer):
         "fund": ["amount="],
         "list": [],
         "recover": ["item="],
-        "trigger": ["items=\"[", "ctvhash="],
+        "trigger": ["items=\"[", "address="],
+        "withdraw": ["item="], # TODO: allow multiple items?
     }
 
     def get_completions(self, document, complete_event):
@@ -62,6 +65,19 @@ rpc_host = os.getenv("RPC_HOST")
 rpc_port = os.getenv("RPC_PORT")
 
 
+def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
+    wit_ver, wit_prog = decode_segwit_address("bcrt", addr)
+
+    if wit_ver is None or wit_prog is None:
+        raise ValueError(f"Invalid segwit address (or wrong network): {addr}")
+
+    return bytes([
+        wit_ver + (0x50 if wit_ver > 0 else 0),
+        len(wit_prog),
+        *wit_prog
+    ])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -79,7 +95,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions = ["fund", "list", "recover", "trigger"]
+    actions = ["fund", "list", "recover", "trigger", "withdraw"]
 
     completer = ActionArgumentCompleter()
     # Create a history object
@@ -98,6 +114,9 @@ if __name__ == "__main__":
     environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)
 
     print(f"Vault address: {V.get_address()}\n")
+
+    # map from known ctv hashes to the corresponding template (used for withdrawals)
+    ctv_templates: dict[bytes, CTransaction] = {}
 
     try:
         while True:
@@ -149,8 +168,23 @@ if __name__ == "__main__":
 
                     spending_vaults.append(manager.instances[idx])
 
-                # TODO: construct a real template
-                ctv_hash = bytes.fromhex("e2ab7eb8891e05e9c37097847f6a2299f269d721167251d81e0301e0a3a0bb16")
+                # construct the CTV template
+
+                ctv_tmpl = CTransaction()
+                ctv_tmpl.nVersion = 2
+                ctv_tmpl.vin = [CTxIn(nSequence=10)]
+                ctv_tmpl.vout = [
+                    CTxOut(
+                        nValue=sum(v.funding_tx.vout[v.outpoint.n].nValue for v in spending_vaults),
+                        scriptPubKey=segwit_addr_to_scriptpubkey(args_dict["address"])
+                    )
+                ]
+
+                # we assume the output is spent as first input
+                ctv_hash = ctv_tmpl.get_standard_template_hash(nIn=0)
+
+                # store the template for later reference
+                ctv_templates[ctv_hash] = ctv_tmpl
 
                 spend_tx, sighashes = manager.get_spend_tx(
                     [(out, "trigger", {"out_i": 0, "ctv_hash": ctv_hash}) for out in spending_vaults]
@@ -179,7 +213,6 @@ if __name__ == "__main__":
                 if not isinstance(instance.contract, (Vault, Unvaulting)):
                     raise ValueError("Only Vault or Unvaulting instances can be recovered")
 
-                # TODO: this does not fill the vout. Need to generalize the framework slightly
                 spend_tx, _ = manager.get_spend_tx((instance, "recover", {"out_i": 0}))
 
                 spend_tx.wit.vtxinwit = [manager.get_spend_wit(
@@ -193,7 +226,35 @@ if __name__ == "__main__":
                 result = manager.spend_and_wait(instance, spend_tx)
                 print("Done")
 
-                pass
+            elif action == "withdraw":
+                item_idx = int(args_dict["item"])
+                instance = manager.instances[item_idx]
+                if instance.status != ContractInstanceStatus.FUNDED or not isinstance(instance.contract, Unvaulting):
+                    raise ValueError("Only FUNDED, Unvaulting instances can be withdrawn")
+
+                ctv_hash = instance.data
+                spend_tx, _ = manager.get_spend_tx(
+                    (instance, "withdraw", {"ctv_hash": ctv_hash})
+                )
+
+                # TODO: get_spend_wit this does not fill the transaction
+                # according to the template (which the manager doesn't know)
+                # Figure out a better way to let the framework handle this
+                spend_tx.wit.vtxinwit = [manager.get_spend_wit(
+                    instance,
+                    "withdraw",
+                    {"ctv_hash": ctv_hash}
+                )]
+
+                spend_tx.nVersion = ctv_templates[ctv_hash].nVersion
+                spend_tx.nLockTime = ctv_templates[ctv_hash].nLockTime
+                spend_tx.vin[0].nSequence = ctv_templates[ctv_hash].vin[0].nSequence  # we assume only 1 input
+                spend_tx.vout = ctv_templates[ctv_hash].vout
+
+                print("Waiting for withdrawal to be confirmed...")
+                print(spend_tx)
+                result = manager.spend_and_wait(instance, spend_tx)
+                print("Done")
 
             elif action == "fund":
                 amount = int(args_dict["amount"])
