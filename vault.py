@@ -78,48 +78,9 @@ def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
     ])
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    # Non-interactive option
-    parser.add_argument("--non-interactive", "-n", action="store_true", help="Run in non-interactive mode")
-
-    # Mine automatically option
-    parser.add_argument("--mine-automatically", "-m", action="store_true", help="Mine automatically")
-
-    # Host option
-    parser.add_argument("--host", default="localhost", type=str, help="Host address (default: localhost)")
-
-    # Port option
-    parser.add_argument("--port", default=12345, type=int, help="Port number (default: 12345)")
-
-    args = parser.parse_args()
-
-    actions = ["fund", "list", "recover", "trigger", "withdraw"]
-
-    completer = ActionArgumentCompleter()
-    # Create a history object
-    history = FileHistory('.cli-history')
-
-    unvault_priv_key = key.ExtendedKey.deserialize(
-        "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
-    recover_priv_key = key.ExtendedKey.deserialize(
-        "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
-
-    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
-
-    V = Vault(None, 10, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
-
-    manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
-    environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)
-
-    print(f"Vault address: {V.get_address()}\n")
-
-    # map from known ctv hashes to the corresponding template (used for withdrawals)
-    ctv_templates: dict[bytes, CTransaction] = {}
-
-    try:
-        while True:
+def main():
+    while True:
+        try:
             input_line = prompt("₿ ", history=history, completer=completer)
 
             # Split into a command and the list of arguments
@@ -264,6 +225,53 @@ if __name__ == "__main__":
                 print(f"Waiting for funding transaction {txid} to be confirmed...")
                 manager.wait_for_outpoint(V_inst, txid)
                 print(V_inst.funding_tx)
+        except (KeyboardInterrupt, EOFError):
+            raise  # exit
+        except Exception as err:
+            print(f"Error: {err}")
 
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    # Non-interactive option
+    parser.add_argument("--non-interactive", "-n", action="store_true", help="Run in non-interactive mode")
+
+    # Mine automatically option
+    parser.add_argument("--mine-automatically", "-m", action="store_true", help="Mine automatically")
+
+    # Host option
+    parser.add_argument("--host", default="localhost", type=str, help="Host address (default: localhost)")
+
+    # Port option
+    parser.add_argument("--port", default=12345, type=int, help="Port number (default: 12345)")
+
+    args = parser.parse_args()
+
+    actions = ["fund", "list", "recover", "trigger", "withdraw"]
+
+    completer = ActionArgumentCompleter()
+    # Create a history object
+    history = FileHistory('.cli-history')
+
+    unvault_priv_key = key.ExtendedKey.deserialize(
+        "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
+    recover_priv_key = key.ExtendedKey.deserialize(
+        "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
+
+    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
+
+    V = Vault(None, 10, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
+
+    manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
+    environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)
+
+    print(f"Vault address: {V.get_address()}\n")
+
+    # map from known ctv hashes to the corresponding template (used for withdrawals)
+    ctv_templates: dict[bytes, CTransaction] = {}
+
+    try:
+        main()
     except (KeyboardInterrupt, EOFError):
         pass  # exit
