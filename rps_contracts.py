@@ -10,7 +10,7 @@ DEFAULT_STAKE: int = 1000  # amount of sats that the players bet
 #  - bob_pk
 #  - c_a
 # spending conditions:
-#  - bob_pk    (m_b) => RPSGameS0[m_b]
+#  - bob_pk    (m_b) => RPSGameS1[m_b]
 class RPSGameS0(StandardP2TR):
     def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes, stake: int = DEFAULT_STAKE):
         assert len(alice_pk) == 32 and len(bob_pk) == 32 and len(c_a) == 32

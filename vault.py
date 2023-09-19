@@ -259,7 +259,7 @@ if __name__ == "__main__":
             elif action == "fund":
                 amount = int(args_dict["amount"])
                 V_inst = ContractInstance(V)
-                manager.instances.append(V_inst)
+                manager.add_instance(V_inst)
                 txid = rpc.sendtoaddress(V_inst.get_address(), amount/100_000_000)
                 print(f"Waiting for funding transaction {txid} to be confirmed...")
                 manager.wait_for_outpoint(V_inst, txid)

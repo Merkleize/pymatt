@@ -142,7 +142,6 @@ class OpaqueP2TR(AbstractContract):
         self.pubkey = pubkey
         # Skip the tweak if there are no scripts
         # Note that this is different than BIP-86, where the key is tweaked with an unspendable script tree hash
-        # TODO: should we put this into a separate BareP2TR class, instead?
         self.tr_info = TaprootInfo(CScript([OP_1, pubkey]), pubkey, None, None, {}, None, pubkey, 0)
 
     def get_tr_info(self) -> TaprootInfo:
@@ -333,6 +332,9 @@ class ContractManager:
 
         if instance not in self.instances:
             raise ValueError("Instance not in this manager")
+
+    def add_instance(self, instance: ContractInstance):
+        self.instances.append(instance)
 
     def wait_for_outpoint(self, instance: ContractInstance, txid: str | None = None):
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.ABSTRACT)
@@ -537,5 +539,6 @@ class ContractManager:
                     out_contracts[i] = new_instance
 
         result = list(out_contracts.values())
-        self.instances.extend(result)  # TODO: add method to add an instance to Manager
+        for instance in result:
+            self.add_instance(instance)
         return result

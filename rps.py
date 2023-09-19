@@ -133,7 +133,7 @@ class AliceGame:
         # Create initial smart contract UTXO
         S0 = RPSGameS0(pk_a, pk_b, c_a)
         C = ContractInstance(S0)
-        M.instances.append(C)  # TODO: add proper method to ContractManager
+        M.add_instance(C)
 
         if self.args.mine_automatically:
             print("Broadcasting funding transaction")
@@ -202,7 +202,7 @@ class BobGame:
         S0 = RPSGameS0(pk_a, pk_b, c_a)
         C = ContractInstance(S0)
         M = self.env.manager
-        M.instances.append(C)
+        M.add_instance(C)
 
         print(f"Bob waiting for output: {C.get_address()}")
 
