@@ -128,7 +128,7 @@ class StandardClause(Clause):
         return result
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(name={self.name}, script={self.script.hex()}, arg_specs={self.arg_specs}, next_output_fn={self.next_outputs_fn})"
+        return f"{self.__class__.__name__}(name={self.name})"
 
 
 class OpaqueP2TR(AbstractContract):
@@ -173,7 +173,7 @@ class P2TR(AbstractContract):
         return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()}, scripts={self.scripts})"
+        return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()})"
 
 
 class AugmentedP2TR(AbstractContract):
@@ -233,7 +233,7 @@ class StandardP2TR(P2TR):
         return clause_name, self._clauses_dict[clause_name].args_from_stack_elements(stack_elems[:-2])
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()}, clauses={self.clauses})"
+        return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()})"
 
 
 class StandardAugmentedP2TR(AugmentedP2TR):
@@ -263,7 +263,7 @@ class StandardAugmentedP2TR(AugmentedP2TR):
         return clause_name, self._clauses_dict[clause_name].args_from_stack_elements(stack_elems[:-2])
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()}, clauses={self.clauses})"
+        return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()})"
 
 
 class ContractInstanceStatus(Enum):
@@ -312,7 +312,10 @@ class ContractInstance:
             return self.contract.decode_wit_stack(stack_elems)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(contract={self.contract}, data={self.data}, status={self.status}, outpoint={self.outpoint})"
+        value = None
+        if self.status != ContractInstanceStatus.ABSTRACT:
+            value = self.funding_tx.vout[self.outpoint.n].nValue
+        return f"{self.__class__.__name__}(contract={self.contract}, data={self.data.hex()}, value={value}, status={self.status}, outpoint={self.outpoint})"
 
 
 class ContractManager:
