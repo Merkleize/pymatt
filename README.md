@@ -29,7 +29,7 @@ Run the demo with:
 $ python vault.py
 ```
 
-`vault.py` is a command line tool that allows to create, manage and spend UTXOs using
+`vault.py` is a command line tool that allows to create, manage and spend the Vault UTXOs.
 
 ## Rock-Paper-Scissors
 
