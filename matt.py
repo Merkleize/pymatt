@@ -315,7 +315,7 @@ class ContractInstance:
         value = None
         if self.status != ContractInstanceStatus.ABSTRACT:
             value = self.funding_tx.vout[self.outpoint.n].nValue
-        return f"{self.__class__.__name__}(contract={self.contract}, data={self.data.hex()}, value={value}, status={self.status}, outpoint={self.outpoint})"
+        return f"{self.__class__.__name__}(contract={self.contract}, data={self.data if self.data is None else self.data.hex()}, value={value}, status={self.status}, outpoint={self.outpoint})"
 
 
 class ContractManager:
