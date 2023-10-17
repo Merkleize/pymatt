@@ -23,6 +23,7 @@ from btctools.messages import CTransaction, CTxIn, CTxOut
 from btctools.segwit_addr import decode_segwit_address
 from environment import Environment
 from matt import ContractInstance, ContractInstanceStatus, ContractManager
+from utils import print_tx
 
 from vault_contracts import Unvaulting, Vault
 
@@ -33,6 +34,7 @@ class ActionArgumentCompleter(Completer):
     ACTION_ARGUMENTS = {
         "fund": ["amount="],
         "list": [],
+        "printall": [],
         "recover": ["item="],
         "trigger": ["items=\"[", "address="],
         "withdraw": ["item="], # TODO: allow multiple items?
@@ -110,6 +112,14 @@ def main():
             elif action == "list":
                 for i, instance in enumerate(manager.instances):
                     print(i, instance.status, instance)
+            elif action == "printall":
+                all_txs = {}
+                for i, instance in enumerate(manager.instances):
+                    if instance.spending_tx is not None:
+                        all_txs[instance.spending_tx.hash] = (instance.contract.__class__.__name__, instance.spending_tx)
+
+                for msg, tx in all_txs.values():
+                    print_tx(tx, msg)
             elif action == "trigger":
                 items_idx = json.loads(args_dict["items"])
                 print("Triggering: ", items_idx)
@@ -248,7 +258,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions = ["fund", "list", "recover", "trigger", "withdraw"]
+    actions = ["fund", "list", "printall", "recover", "trigger", "withdraw"]
 
     completer = ActionArgumentCompleter()
     # Create a history object
