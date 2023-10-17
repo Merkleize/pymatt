@@ -281,9 +281,9 @@ class ContractInstance:
 
         self.status = ContractInstanceStatus.ABSTRACT
         self.outpoint = None
-        self.funding_tx = None
+        self.funding_tx: CTransaction | None = None
 
-        self.spending_tx = None
+        self.spending_tx: CTransaction | None = None
         self.spending_vin = None
 
         self.spending_clause = None
