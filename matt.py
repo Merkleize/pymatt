@@ -10,8 +10,9 @@ from btctools.segwit_addr import encode_segwit_address
 from utils import wait_for_output, wait_for_spending_tx
 
 # Flags for OP_CHECKCONTRACTVERIFY
-CCV_FLAG_CHECK_INPUT: int = 1
-CCV_FLAG_IGNORE_OUTPUT_AMOUNT: int = 2
+CCV_FLAG_CHECK_INPUT: int = -1
+CCV_FLAG_IGNORE_OUTPUT_AMOUNT: int = 1
+CCV_FLAG_DEDUCT_OUTPUT_AMOUNT: int = 2
 
 # point with provably unknown private key
 NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
@@ -34,9 +35,10 @@ class AbstractContract:
     pass
 
 
-class ClauseOutputAmountBehavior(Enum):
+class ClauseOutputAmountBehaviour(Enum):
     PRESERVE_OUTPUT = 0  # The output should be at least as large as the input
     IGNORE_OUTPUT = 1  # The output amount is not checked
+    DEDUCT_OUTPUT = 1  # The output amount is subtracted from the input
 
 
 @dataclass
@@ -44,7 +46,7 @@ class ClauseOutput:
     n: None | int
     next_contract: AbstractContract  # only StandardP2TR and StandardAugmentedP2TR are supported so far
     next_data: None | bytes = None  # only meaningful if c is augmented
-    next_amount: ClauseOutputAmountBehavior = ClauseOutputAmountBehavior.PRESERVE_OUTPUT
+    next_amount: ClauseOutputAmountBehaviour = ClauseOutputAmountBehaviour.PRESERVE_OUTPUT
 
     def __repr__(self):
         return f"ClauseOutput(n={self.n}, next_contract={self.next_contract}, next_data={self.next_data}, next_amount={self.next_amount})"
@@ -280,7 +282,7 @@ class ContractInstance:
         self.last_height = 0
 
         self.status = ContractInstanceStatus.ABSTRACT
-        self.outpoint = None
+        self.outpoint: COutPoint | None = None
         self.funding_tx: CTransaction | None = None
 
         self.spending_tx: CTransaction | None = None
@@ -304,6 +306,11 @@ class ContractInstance:
 
     def get_address(self) -> str:
         return encode_segwit_address("bcrt", 1, bytes(self.get_tr_info().scriptPubKey)[2:])
+
+    def get_value(self) -> int:
+        if self.funding_tx is None:
+            raise ValueError("contract not funded, or funding transaction unknown")
+        return self.funding_tx.vout[self.outpoint.n].nValue
 
     def decode_wit_stack(self, stack_elems: list[bytes]) -> tuple[str, dict]:
         if self.is_augm():
@@ -362,7 +369,9 @@ class ContractManager:
 
     def get_spend_tx(
             self,
-            spends: tuple[ContractInstance, str, dict] | list[tuple[ContractInstance, str, dict]]) -> tuple[CTransaction, list[bytes]]:
+            spends: tuple[ContractInstance, str, dict] | list[tuple[ContractInstance, str, dict]],
+            output_amounts: dict[int, int] = {}
+        ) -> tuple[CTransaction, list[bytes]]:
         if not isinstance(spends, list):
             spends = [spends]
 
@@ -390,7 +399,9 @@ class ContractManager:
                 tx.vout = next_outputs.vout
                 has_ctv_clause = True
             else:
-                for i, clause_output in enumerate(next_outputs):
+                preserve_output_used = False
+                ccv_amount = instance.funding_tx.vout[instance.outpoint.n].nValue
+                for clause_output in next_outputs:
                     out_contract = clause_output.next_contract
                     if isinstance(out_contract, (P2TR, OpaqueP2TR)):
                         out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
@@ -401,17 +412,26 @@ class ContractManager:
                     else:
                         raise ValueError("Unsupported contract type")
 
-                    if i in outputs_map:
-                        if outputs_map[i].scriptPubKey != out_scriptPubKey:
+                    if clause_output.n in outputs_map:
+                        if outputs_map[clause_output.n].scriptPubKey != out_scriptPubKey:
                             raise ValueError(
-                                f"Clashing output script for output {i}: specifications for input {input_index} don't match a previous one")
+                                f"Clashing output script for output {clause_output.n}: specifications for input {input_index} don't match a previous one")
                     else:
-                        outputs_map[i] = CTxOut(0, out_scriptPubKey)
+                        outputs_map[clause_output.n] = CTxOut(0, out_scriptPubKey)
 
-                    if clause_output.next_amount != ClauseOutputAmountBehavior.PRESERVE_OUTPUT:
-                        raise ValueError("Output template not preserving the output amount is not supported")
+                    if clause_output.next_amount == ClauseOutputAmountBehaviour.PRESERVE_OUTPUT:
+                        outputs_map[clause_output.n].nValue += ccv_amount
+                        preserve_output_used = True
+                    elif clause_output.next_amount == ClauseOutputAmountBehaviour.DEDUCT_OUTPUT:
+                        if preserve_output_used:
+                            raise ValueError("DEDUCT_OUTPUT clause outputs must be declared before PRESERVE_OUTPUT clause outputs")
+                        if clause_output.n not in output_amounts:
+                            raise ValueError("The output amount must be specified for clause outputs using DEDUCT_AMOUNT")
+
+                        outputs_map[clause_output.n].nValue = output_amounts[clause_output.n]
+                        ccv_amount -= output_amounts[clause_output.n]
                     else:
-                        outputs_map[i].nValue += instance.funding_tx.vout[instance.outpoint.n].nValue
+                        raise ValueError("Only PRESERVE_OUTPUT and DEDUCT_OUTPUT clause outputs are supported")
 
         if not has_ctv_clause:
             if set(outputs_map.keys()) != set(range(len(outputs_map))):
@@ -515,10 +535,8 @@ class ContractManager:
                 # this might be generalized in the future
                 pass
             else:
-                for i, clause_output in enumerate(next_outputs):
-                    assert clause_output.n == i  # for now, we only accept templates where all the outputs are described
-
-                    if i in out_contracts:
+                for clause_output in next_outputs:
+                    if clause_output.n in out_contracts:
                         continue  # output already specified by another input
 
                     out_contract = clause_output.next_contract
@@ -535,11 +553,11 @@ class ContractManager:
 
                     new_instance.last_height = instance.last_height
 
-                    new_instance.outpoint = COutPoint(int(tx.hash, 16), i)
+                    new_instance.outpoint = COutPoint(int(tx.hash, 16), clause_output.n)
                     new_instance.funding_tx = tx
                     new_instance.status = ContractInstanceStatus.FUNDED
 
-                    out_contracts[i] = new_instance
+                    out_contracts[clause_output.n] = new_instance
 
         result = list(out_contracts.values())
         for instance in result:
