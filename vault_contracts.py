@@ -1,5 +1,5 @@
 from btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DROP, OP_DUP, OP_SWAP, OP_TRUE, CScript
-from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, ClauseOutput, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from matt import CCV_FLAG_CHECK_INPUT, CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY, ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
 
 class Vault(StandardP2TR):
@@ -30,7 +30,39 @@ class Vault(StandardP2TR):
                 ('ctv_hash', bytes),
                 ('out_i', int),
             ],
-            next_output_fn=lambda args: [ClauseOutput(n=0, next_contract=unvaulting, next_data=args['ctv_hash'])]
+            next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash'])]
+        )
+
+        # witness: <sig> <ctv-hash> <trigger_out_i> <revault_out_i>
+        trigger_and_recover = StandardClause(
+            name="trigger_and_revault",
+            script=CScript([
+                0, OP_SWAP   # no data tweak
+                # <revault_out_i> from the witness
+                -1,  # current input's taptweak
+                -1,  # taptree
+                CCV_FLAG_DEDUCT_OUTPUT_AMOUNT,  # revault output
+                OP_CHECKCONTRACTVERIFY,
+
+                # data and index already on the stack
+                0 if alternate_pk is None else alternate_pk,  # pk
+                unvaulting.get_taptree(),  # taptree
+                0,  # standard flags
+                OP_CHECKCONTRACTVERIFY,
+
+                unvault_pk,
+                OP_CHECKSIG
+            ]),
+            arg_specs=[
+                ('sig', bytes),
+                ('ctv_hash', bytes),
+                ('out_i', int),
+                ('revault_out_i', int),
+            ],
+            next_output_fn=lambda args: [
+                ClauseOutput(n=args['revault_out_i'], next_contract=self,  next_amount=ClauseOutputAmountBehaviour.DEDUCT_OUTPUT),
+                ClauseOutput(n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash']),
+            ]
         )
 
         # witness: <out_i>
@@ -51,7 +83,7 @@ class Vault(StandardP2TR):
             next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
-        super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [trigger, recover])
+        super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [trigger, trigger_and_recover, recover])
 
 
 class Unvaulting(StandardAugmentedP2TR):

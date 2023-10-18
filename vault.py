@@ -9,6 +9,7 @@ import os
 
 import logging
 import shlex
+import traceback
 
 from dotenv import load_dotenv
 
@@ -36,7 +37,7 @@ class ActionArgumentCompleter(Completer):
         "list": [],
         "printall": [],
         "recover": ["item="],
-        "trigger": ["items=\"[", "address="],
+        "trigger": ["items=\"[", "outputs=\"["],
         "withdraw": ["item="], # TODO: allow multiple items?
     }
 
@@ -78,6 +79,25 @@ def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
         len(wit_prog),
         *wit_prog
     ])
+
+
+def parse_outputs(output_strings: list[str]) -> list[tuple[str, int]]:
+    """Parses a list of strings in the form "address:amount" into a list of (address, amount) tuples.
+    
+    Args:
+    - output_strings (list of str): List of strings in the form "address:amount".
+    
+    Returns:
+    - list of (str, int): List of (address, amount) tuples.
+    """
+    outputs = []
+    for output_str in output_strings:
+        address, amount_str = output_str.split(":")
+        amount = int(amount_str)
+        if amount <= 0:
+            raise ValueError(f"Invalid amount for address {address}: {amount_str}")
+        outputs.append((address, amount))
+    return outputs
 
 
 def main():
@@ -139,41 +159,74 @@ def main():
 
                     spending_vaults.append(manager.instances[idx])
 
+                inputs_total_amount = sum(ci.get_value() for ci in spending_vaults)
+
                 # construct the CTV template
 
                 ctv_tmpl = CTransaction()
                 ctv_tmpl.nVersion = 2
                 ctv_tmpl.vin = [CTxIn(nSequence=10)]
-                ctv_tmpl.vout = [
-                    CTxOut(
-                        nValue=sum(v.funding_tx.vout[v.outpoint.n].nValue for v in spending_vaults),
-                        scriptPubKey=segwit_addr_to_scriptpubkey(args_dict["address"])
-                    )
-                ]
+                
+                outputs = parse_outputs(json.loads(args_dict["outputs"]))
+                outputs_total_amount = sum(out[1] for out in outputs)
 
-                # we assume the output is spent as first input
+                if outputs_total_amount > inputs_total_amount:
+                    print("Outputs amount is greater than inputs amount")
+                    continue
+
+                revault_amount = inputs_total_amount - outputs_total_amount
+
+                # prepare template hash
+                ctv_tmpl.vout = []
+                for address, amount in outputs:
+                    ctv_tmpl.vout.append(CTxOut(
+                            nValue=amount,
+                            scriptPubKey=segwit_addr_to_scriptpubkey(address)
+                        )
+                    )
+
+                # we assume the output is spent as first input later in the withdrawal transaction
                 ctv_hash = ctv_tmpl.get_standard_template_hash(nIn=0)
+
+                # sort vault UTXOs by decreasing amount value
+                sorted_spending_vaults = sorted(spending_vaults, key=lambda v: v.get_value(), reverse=True)
+
+                spends = []
+                for (i, v) in enumerate(sorted_spending_vaults):
+                    if i == 0 and revault_amount > 0:
+                        # if there's a revault amount, we split the largest UTXO and revault the difference.
+                        # at this time, we don't support partially revaulting from multiple UTXOs
+                        # (which might perhaps be useful for UTXO management in a real vault)
+                        if revault_amount > v.get_value():
+                            raise ValueError(f"Input's amount {v.get_value()} is not enough for the revault amount {revault_amount}")
+                        spends.append(
+                            (v, "trigger_and_revault", {"out_i": 0, "revault_out_i": 1, "ctv_hash": ctv_hash})
+                        )
+                    else:
+                        spends.append(
+                            (v, "trigger", {"out_i": 0, "ctv_hash": ctv_hash})
+                        )
+
+                spend_tx, sighashes = manager.get_spend_tx(spends, output_amounts={1: revault_amount})
+
+                spend_tx.wit.vtxinwit = []
+
+                sigs = [key.sign_schnorr(unvault_priv_key.privkey, sighash) for sighash in sighashes]
+
+                for i, (_, action, args) in enumerate(spends):
+                    spend_tx.wit.vtxinwit.append(manager.get_spend_wit(
+                        spending_vaults[i],
+                        action,
+                        {**args, "sig": sigs[i]}
+                    ))
+
+
+                print("Waiting for trigger transaction to be confirmed...")
+                result = manager.spend_and_wait(spending_vaults, spend_tx)
 
                 # store the template for later reference
                 ctv_templates[ctv_hash] = ctv_tmpl
 
-                spend_tx, sighashes = manager.get_spend_tx(
-                    [(out, "trigger", {"out_i": 0, "ctv_hash": ctv_hash}) for out in spending_vaults]
-                )
-                print(spend_tx)
-                print(sighashes)
-
-                sigs = [key.sign_schnorr(unvault_priv_key.privkey, sighash) for sighash in sighashes]
-                spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-                    spending_vaults[i],
-                    "trigger",
-                    {"out_i": 0, "ctv_hash": ctv_hash, "sig": sigs[i]}
-                )
-                    for i in range(len(items_idx))
-                ]
-
-                print("Waiting for trigger transaction to be confirmed...")
-                result = manager.spend_and_wait(spending_vaults, spend_tx)
                 print("Done")
 
             elif action == "recover":
@@ -239,7 +292,7 @@ def main():
             raise  # exit
         except Exception as err:
             print(f"Error: {err}")
-
+            print(traceback.format_exc())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
