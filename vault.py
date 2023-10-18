@@ -100,199 +100,219 @@ def parse_outputs(output_strings: list[str]) -> list[tuple[str, int]]:
     return outputs
 
 
-def main():
+def execute_command(input_line: str):
+    # Split into a command and the list of arguments
+    try:
+        input_line_list = shlex.split(input_line)
+    except ValueError as e:
+        print(f"Invalid command: {str(e)}")
+        return
+
+    # Ensure input_line_list is not empty
+    if input_line_list:
+        action = input_line_list[0].strip()
+    else:
+        return
+
+    # Get the necessary arguments from input_command_list
+    args_dict = {}
+    for item in input_line_list[1:]:
+        param, value = item.split('=', 1)
+        args_dict[param] = value
+
+    if action == "":
+        return
+    elif action not in actions:
+        print("Invalid action")
+        return
+    elif action == "list":
+        for i, instance in enumerate(manager.instances):
+            print(i, instance.status, instance)
+    elif action == "printall":
+        all_txs = {}
+        for i, instance in enumerate(manager.instances):
+            if instance.spending_tx is not None:
+                all_txs[instance.spending_tx.hash] = (instance.contract.__class__.__name__, instance.spending_tx)
+
+        for msg, tx in all_txs.values():
+            print_tx(tx, msg)
+    elif action == "trigger":
+        items_idx = json.loads(args_dict["items"])
+        print("Triggering: ", items_idx)
+
+        if not isinstance(items_idx, list) or len(set(items_idx)) != len(items_idx):
+            raise ValueError("Invalid items")
+
+        spending_vaults: list[ContractInstance] = []
+        for idx in items_idx:
+            if idx >= len(manager.instances):
+                raise ValueError(f"No such instance: {idx}")
+            instance: ContractInstance = manager.instances[idx]
+            if instance.status != ContractInstanceStatus.FUNDED:
+                raise ValueError("Only FUNDED instances can be triggered")
+            if not isinstance(instance.contract, Vault):
+                raise ValueError("Only Vault instances can be triggered")
+
+            spending_vaults.append(manager.instances[idx])
+
+        inputs_total_amount = sum(ci.get_value() for ci in spending_vaults)
+
+        # construct the CTV template
+
+        ctv_tmpl = CTransaction()
+        ctv_tmpl.nVersion = 2
+        ctv_tmpl.vin = [CTxIn(nSequence=10)]
+        
+        outputs = parse_outputs(json.loads(args_dict["outputs"]))
+        outputs_total_amount = sum(out[1] for out in outputs)
+
+        if outputs_total_amount > inputs_total_amount:
+            print("Outputs amount is greater than inputs amount")
+            return
+
+        revault_amount = inputs_total_amount - outputs_total_amount
+
+        # prepare template hash
+        ctv_tmpl.vout = []
+        for address, amount in outputs:
+            ctv_tmpl.vout.append(CTxOut(
+                    nValue=amount,
+                    scriptPubKey=segwit_addr_to_scriptpubkey(address)
+                )
+            )
+
+        # we assume the output is spent as first input later in the withdrawal transaction
+        ctv_hash = ctv_tmpl.get_standard_template_hash(nIn=0)
+
+        # sort vault UTXOs by decreasing amount value
+        sorted_spending_vaults = sorted(spending_vaults, key=lambda v: v.get_value(), reverse=True)
+
+        spends = []
+        for (i, v) in enumerate(sorted_spending_vaults):
+            if i == 0 and revault_amount > 0:
+                # if there's a revault amount, we split the largest UTXO and revault the difference.
+                # at this time, we don't support partially revaulting from multiple UTXOs
+                # (which might perhaps be useful for UTXO management in a real vault)
+                if revault_amount > v.get_value():
+                    raise ValueError(f"Input's amount {v.get_value()} is not enough for the revault amount {revault_amount}")
+                spends.append(
+                    (v, "trigger_and_revault", {"out_i": 0, "revault_out_i": 1, "ctv_hash": ctv_hash})
+                )
+            else:
+                spends.append(
+                    (v, "trigger", {"out_i": 0, "ctv_hash": ctv_hash})
+                )
+
+        spend_tx, sighashes = manager.get_spend_tx(spends, output_amounts={1: revault_amount})
+
+        spend_tx.wit.vtxinwit = []
+
+        sigs = [key.sign_schnorr(unvault_priv_key.privkey, sighash) for sighash in sighashes]
+
+        for i, (_, action, args) in enumerate(spends):
+            spend_tx.wit.vtxinwit.append(manager.get_spend_wit(
+                spending_vaults[i],
+                action,
+                {**args, "sig": sigs[i]}
+            ))
+
+
+        print("Waiting for trigger transaction to be confirmed...")
+        result = manager.spend_and_wait(spending_vaults, spend_tx)
+
+        # store the template for later reference
+        ctv_templates[ctv_hash] = ctv_tmpl
+
+        print("Done")
+
+    elif action == "recover":
+        item_idx = int(args_dict["item"])
+        instance = manager.instances[item_idx]
+        if instance.status != ContractInstanceStatus.FUNDED:
+            raise ValueError("Only FUNDED instances can be recovered")
+        if not isinstance(instance.contract, (Vault, Unvaulting)):
+            raise ValueError("Only Vault or Unvaulting instances can be recovered")
+
+        spend_tx, _ = manager.get_spend_tx((instance, "recover", {"out_i": 0}))
+
+        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
+            instance,
+            "recover",
+            {"out_i": 0}
+        )]
+
+        print("Waiting for recover transaction to be confirmed...")
+        print(spend_tx)
+        result = manager.spend_and_wait(instance, spend_tx)
+        print("Done")
+
+    elif action == "withdraw":
+        item_idx = int(args_dict["item"])
+        instance = manager.instances[item_idx]
+        if instance.status != ContractInstanceStatus.FUNDED or not isinstance(instance.contract, Unvaulting):
+            raise ValueError("Only FUNDED, Unvaulting instances can be withdrawn")
+
+        ctv_hash = instance.data
+        spend_tx, _ = manager.get_spend_tx(
+            (instance, "withdraw", {"ctv_hash": ctv_hash})
+        )
+
+        # TODO: get_spend_wit this does not fill the transaction
+        # according to the template (which the manager doesn't know)
+        # Figure out a better way to let the framework handle this
+        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
+            instance,
+            "withdraw",
+            {"ctv_hash": ctv_hash}
+        )]
+
+        spend_tx.nVersion = ctv_templates[ctv_hash].nVersion
+        spend_tx.nLockTime = ctv_templates[ctv_hash].nLockTime
+        spend_tx.vin[0].nSequence = ctv_templates[ctv_hash].vin[0].nSequence  # we assume only 1 input
+        spend_tx.vout = ctv_templates[ctv_hash].vout
+
+        print("Waiting for withdrawal to be confirmed...")
+        print(spend_tx)
+        result = manager.spend_and_wait(instance, spend_tx)
+        print("Done")
+
+    elif action == "fund":
+        amount = int(args_dict["amount"])
+        V_inst = ContractInstance(V)
+        manager.add_instance(V_inst)
+        txid = rpc.sendtoaddress(V_inst.get_address(), amount/100_000_000)
+        print(f"Waiting for funding transaction {txid} to be confirmed...")
+        manager.wait_for_outpoint(V_inst, txid)
+        print(V_inst.funding_tx)
+
+
+def cli_main():
+    completer = ActionArgumentCompleter()
+    # Create a history object
+    history = FileHistory('.cli-history')
+
     while True:
         try:
             input_line = prompt("₿ ", history=history, completer=completer)
-
-            # Split into a command and the list of arguments
-            try:
-                input_line_list = shlex.split(input_line)
-            except ValueError as e:
-                print(f"Invalid command: {str(e)}")
-                continue
-
-            # Ensure input_line_list is not empty
-            if input_line_list:
-                action = input_line_list[0].strip()
-            else:
-                continue
-
-            # Get the necessary arguments from input_command_list
-            args_dict = {}
-            for item in input_line_list[1:]:
-                param, value = item.split('=', 1)
-                args_dict[param] = value
-
-            if action == "":
-                continue
-            elif action not in actions:
-                print("Invalid action")
-                continue
-            elif action == "list":
-                for i, instance in enumerate(manager.instances):
-                    print(i, instance.status, instance)
-            elif action == "printall":
-                all_txs = {}
-                for i, instance in enumerate(manager.instances):
-                    if instance.spending_tx is not None:
-                        all_txs[instance.spending_tx.hash] = (instance.contract.__class__.__name__, instance.spending_tx)
-
-                for msg, tx in all_txs.values():
-                    print_tx(tx, msg)
-            elif action == "trigger":
-                items_idx = json.loads(args_dict["items"])
-                print("Triggering: ", items_idx)
-
-                if not isinstance(items_idx, list) or len(set(items_idx)) != len(items_idx):
-                    raise ValueError("Invalid items")
-
-                spending_vaults: list[ContractInstance] = []
-                for idx in items_idx:
-                    if idx >= len(manager.instances):
-                        raise ValueError(f"No such instance: {idx}")
-                    instance: ContractInstance = manager.instances[idx]
-                    if instance.status != ContractInstanceStatus.FUNDED:
-                        raise ValueError("Only FUNDED instances can be triggered")
-                    if not isinstance(instance.contract, Vault):
-                        raise ValueError("Only Vault instances can be triggered")
-
-                    spending_vaults.append(manager.instances[idx])
-
-                inputs_total_amount = sum(ci.get_value() for ci in spending_vaults)
-
-                # construct the CTV template
-
-                ctv_tmpl = CTransaction()
-                ctv_tmpl.nVersion = 2
-                ctv_tmpl.vin = [CTxIn(nSequence=10)]
-                
-                outputs = parse_outputs(json.loads(args_dict["outputs"]))
-                outputs_total_amount = sum(out[1] for out in outputs)
-
-                if outputs_total_amount > inputs_total_amount:
-                    print("Outputs amount is greater than inputs amount")
-                    continue
-
-                revault_amount = inputs_total_amount - outputs_total_amount
-
-                # prepare template hash
-                ctv_tmpl.vout = []
-                for address, amount in outputs:
-                    ctv_tmpl.vout.append(CTxOut(
-                            nValue=amount,
-                            scriptPubKey=segwit_addr_to_scriptpubkey(address)
-                        )
-                    )
-
-                # we assume the output is spent as first input later in the withdrawal transaction
-                ctv_hash = ctv_tmpl.get_standard_template_hash(nIn=0)
-
-                # sort vault UTXOs by decreasing amount value
-                sorted_spending_vaults = sorted(spending_vaults, key=lambda v: v.get_value(), reverse=True)
-
-                spends = []
-                for (i, v) in enumerate(sorted_spending_vaults):
-                    if i == 0 and revault_amount > 0:
-                        # if there's a revault amount, we split the largest UTXO and revault the difference.
-                        # at this time, we don't support partially revaulting from multiple UTXOs
-                        # (which might perhaps be useful for UTXO management in a real vault)
-                        if revault_amount > v.get_value():
-                            raise ValueError(f"Input's amount {v.get_value()} is not enough for the revault amount {revault_amount}")
-                        spends.append(
-                            (v, "trigger_and_revault", {"out_i": 0, "revault_out_i": 1, "ctv_hash": ctv_hash})
-                        )
-                    else:
-                        spends.append(
-                            (v, "trigger", {"out_i": 0, "ctv_hash": ctv_hash})
-                        )
-
-                spend_tx, sighashes = manager.get_spend_tx(spends, output_amounts={1: revault_amount})
-
-                spend_tx.wit.vtxinwit = []
-
-                sigs = [key.sign_schnorr(unvault_priv_key.privkey, sighash) for sighash in sighashes]
-
-                for i, (_, action, args) in enumerate(spends):
-                    spend_tx.wit.vtxinwit.append(manager.get_spend_wit(
-                        spending_vaults[i],
-                        action,
-                        {**args, "sig": sigs[i]}
-                    ))
-
-
-                print("Waiting for trigger transaction to be confirmed...")
-                result = manager.spend_and_wait(spending_vaults, spend_tx)
-
-                # store the template for later reference
-                ctv_templates[ctv_hash] = ctv_tmpl
-
-                print("Done")
-
-            elif action == "recover":
-                item_idx = int(args_dict["item"])
-                instance = manager.instances[item_idx]
-                if instance.status != ContractInstanceStatus.FUNDED:
-                    raise ValueError("Only FUNDED instances can be recovered")
-                if not isinstance(instance.contract, (Vault, Unvaulting)):
-                    raise ValueError("Only Vault or Unvaulting instances can be recovered")
-
-                spend_tx, _ = manager.get_spend_tx((instance, "recover", {"out_i": 0}))
-
-                spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-                    instance,
-                    "recover",
-                    {"out_i": 0}
-                )]
-
-                print("Waiting for recover transaction to be confirmed...")
-                print(spend_tx)
-                result = manager.spend_and_wait(instance, spend_tx)
-                print("Done")
-
-            elif action == "withdraw":
-                item_idx = int(args_dict["item"])
-                instance = manager.instances[item_idx]
-                if instance.status != ContractInstanceStatus.FUNDED or not isinstance(instance.contract, Unvaulting):
-                    raise ValueError("Only FUNDED, Unvaulting instances can be withdrawn")
-
-                ctv_hash = instance.data
-                spend_tx, _ = manager.get_spend_tx(
-                    (instance, "withdraw", {"ctv_hash": ctv_hash})
-                )
-
-                # TODO: get_spend_wit this does not fill the transaction
-                # according to the template (which the manager doesn't know)
-                # Figure out a better way to let the framework handle this
-                spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-                    instance,
-                    "withdraw",
-                    {"ctv_hash": ctv_hash}
-                )]
-
-                spend_tx.nVersion = ctv_templates[ctv_hash].nVersion
-                spend_tx.nLockTime = ctv_templates[ctv_hash].nLockTime
-                spend_tx.vin[0].nSequence = ctv_templates[ctv_hash].vin[0].nSequence  # we assume only 1 input
-                spend_tx.vout = ctv_templates[ctv_hash].vout
-
-                print("Waiting for withdrawal to be confirmed...")
-                print(spend_tx)
-                result = manager.spend_and_wait(instance, spend_tx)
-                print("Done")
-
-            elif action == "fund":
-                amount = int(args_dict["amount"])
-                V_inst = ContractInstance(V)
-                manager.add_instance(V_inst)
-                txid = rpc.sendtoaddress(V_inst.get_address(), amount/100_000_000)
-                print(f"Waiting for funding transaction {txid} to be confirmed...")
-                manager.wait_for_outpoint(V_inst, txid)
-                print(V_inst.funding_tx)
+            execute_command(input_line)
         except (KeyboardInterrupt, EOFError):
             raise  # exit
         except Exception as err:
             print(f"Error: {err}")
             print(traceback.format_exc())
+
+
+def script_main(script_filename: str):
+    with open(script_filename, "r") as script_file:
+        for input_line in script_file:
+            try:
+                # Assuming each command can be executed in a similar manner to the CLI
+                # This will depend on the structure of the main() function and may need adjustments
+                execute_command(input_line)
+            except Exception as e:
+                print(f"Error executing command: {input_line.strip()} - Error: {str(e)}")
+                break
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -309,13 +329,12 @@ if __name__ == "__main__":
     # Port option
     parser.add_argument("--port", default=12345, type=int, help="Port number (default: 12345)")
 
+    # Script file option
+    parser.add_argument("--script", "-s", type=str, help="Execute commands from script file")
+
     args = parser.parse_args()
 
     actions = ["fund", "list", "printall", "recover", "trigger", "withdraw"]
-
-    completer = ActionArgumentCompleter()
-    # Create a history object
-    history = FileHistory('.cli-history')
 
     unvault_priv_key = key.ExtendedKey.deserialize(
         "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
@@ -334,7 +353,11 @@ if __name__ == "__main__":
     # map from known ctv hashes to the corresponding template (used for withdrawals)
     ctv_templates: dict[bytes, CTransaction] = {}
 
-    try:
-        main()
-    except (KeyboardInterrupt, EOFError):
-        pass  # exit
+
+    if args.script:
+        script_main(args.script)
+    else:
+        try:
+            cli_main()
+        except (KeyboardInterrupt, EOFError):
+            pass  # exit
