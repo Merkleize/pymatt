@@ -476,9 +476,9 @@ class ContractManager:
         ]
         return in_wit
 
-    def _mine_blocks(self, n_blocks: int = 1):
+    def _mine_blocks(self, n_blocks: int = 1) -> list[str]:
         address = self.rpc.getnewaddress()
-        self.rpc.generatetoaddress(n_blocks, address)
+        return self.rpc.generatetoaddress(n_blocks, address)
 
     def spend_and_wait(self, instances: ContractInstance | list[ContractInstance], tx: CTransaction) -> list[ContractInstance]:
         if isinstance(instances, ContractInstance):

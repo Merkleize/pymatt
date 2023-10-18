@@ -116,9 +116,16 @@ def execute_command(input_line: str):
 
     # Get the necessary arguments from input_command_list
     args_dict = {}
+    pos_count = 0  # count of positional arguments
     for item in input_line_list[1:]:
-        param, value = item.split('=', 1)
-        args_dict[param] = value
+        parts = item.strip().split('=', 1)
+        if len(parts) == 2:
+            param, value = parts
+            args_dict[param] = value
+        else:
+            # record positional arguments with keys @0, @1, ...
+            args_dict['@' + str(pos_count)] = parts[0]
+            pos_count += 1
 
     if action == "":
         return
@@ -128,6 +135,12 @@ def execute_command(input_line: str):
     elif action == "list":
         for i, instance in enumerate(manager.instances):
             print(i, instance.status, instance)
+    elif action == "mine":
+        if '@0' in args_dict:
+            n_blocks = int(args_dict['@0'])
+        else:
+            n_blocks = 1
+        print(repr(manager._mine_blocks(n_blocks)))
     elif action == "printall":
         all_txs = {}
         for i, instance in enumerate(manager.instances):
@@ -334,7 +347,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions = ["fund", "list", "printall", "recover", "trigger", "withdraw"]
+    actions = ["fund", "mine", "list", "printall", "recover", "trigger", "withdraw"]
 
     unvault_priv_key = key.ExtendedKey.deserialize(
         "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
