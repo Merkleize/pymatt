@@ -101,6 +101,10 @@ def parse_outputs(output_strings: list[str]) -> list[tuple[str, int]]:
 
 
 def execute_command(input_line: str):
+    # consider lines starting with '#' (possibly prefixed with whitespaces) as comments
+    if input_line.strip().startswith("#"):
+        return
+
     # Split into a command and the list of arguments
     try:
         input_line_list = shlex.split(input_line)
