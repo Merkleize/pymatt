@@ -254,9 +254,6 @@ if __name__ == "__main__":
     group_move.add_argument("--paper", action="store_true", help="Play Paper")
     group_move.add_argument("--scissors", action="store_true", help="Play Scissors")
 
-    # Move option
-    parser.add_argument("--move", default="localhost", type=str, help="Host address (default: localhost)")
-
     # Non-interactive option
     parser.add_argument("--non-interactive", "-n", action="store_true", help="Run in non-interactive mode")
 
