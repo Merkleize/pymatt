@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from typing import Callable
-from btctools import script, key
-from btctools.auth_proxy import AuthServiceProxy
-from btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness
-from btctools.script import OP_1, CScript, CTxOut, TaprootInfo
-from btctools.segwit_addr import encode_segwit_address
-from utils import wait_for_output, wait_for_spending_tx
+from .btctools import script, key
+from .btctools.auth_proxy import AuthServiceProxy
+from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness
+from .btctools.script import OP_1, CScript, CTxOut, TaprootInfo
+from .btctools.segwit_addr import encode_segwit_address
+from .utils import wait_for_output, wait_for_spending_tx
 
 # Flags for OP_CHECKCONTRACTVERIFY
 CCV_FLAG_CHECK_INPUT: int = -1

@@ -17,14 +17,14 @@ from prompt_toolkit import prompt
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 
-from btctools.auth_proxy import AuthServiceProxy
+from matt.btctools.auth_proxy import AuthServiceProxy
 
-import btctools.key as key
-from btctools.messages import CTransaction, CTxIn, CTxOut
-from btctools.segwit_addr import decode_segwit_address
-from environment import Environment
+from matt.btctools import key
+from matt.btctools.messages import CTransaction, CTxIn, CTxOut
+from matt.btctools.segwit_addr import decode_segwit_address
+from matt.environment import Environment
 from matt import ContractInstance, ContractInstanceStatus, ContractManager
-from utils import print_tx
+from matt.utils import print_tx
 
 from vault_contracts import Unvaulting, Vault
 
@@ -62,10 +62,10 @@ NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d
 
 load_dotenv()
 
-rpc_user = os.getenv("RPC_USER")
-rpc_password = os.getenv("RPC_PASSWORD")
-rpc_host = os.getenv("RPC_HOST")
-rpc_port = os.getenv("RPC_PORT")
+rpc_user = os.getenv("RPC_USER", "rpcuser")
+rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
+rpc_host = os.getenv("RPC_HOST", "localhost")
+rpc_port = os.getenv("RPC_PORT", 18443)
 
 
 def segwit_addr_to_scriptpubkey(addr: str) -> bytes:

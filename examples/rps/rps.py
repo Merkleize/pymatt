@@ -45,12 +45,13 @@ import random
 import os
 
 from dotenv import load_dotenv
-from btctools.auth_proxy import AuthServiceProxy
 
-import btctools.key as key
-from btctools.messages import sha256
-import btctools.script as script
-from environment import Environment
+from matt.btctools.auth_proxy import AuthServiceProxy
+
+import matt.btctools.key as key
+from matt.btctools.messages import sha256
+import matt.btctools.script as script
+from matt.environment import Environment
 from matt import ContractInstance, ContractManager
 
 from rps_contracts import DEFAULT_STAKE, RPSGameS0
@@ -58,10 +59,10 @@ from rps_contracts import DEFAULT_STAKE, RPSGameS0
 
 load_dotenv()
 
-rpc_user = os.getenv("RPC_USER")
-rpc_password = os.getenv("RPC_PASSWORD")
-rpc_host = os.getenv("RPC_HOST")
-rpc_port = os.getenv("RPC_PORT")
+rpc_user = os.getenv("RPC_USER", "rpcuser")
+rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
+rpc_host = os.getenv("RPC_HOST", "localhost")
+rpc_port = os.getenv("RPC_PORT", 18443)
 
 
 class RPS:

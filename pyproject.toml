@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "matt"
+version = "0.0.1"
+authors = [
+    {name = "Salvatore Ingala", email = "salvatore.ingala@protonmail.com"},
+]
+description = "Merkleize All The Things"
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = ["covenant", "smart contracts", "bitcoin"]
+license = { file = "LICENSE" }
+dependencies = [
+    "prompt-toolkit>=3.0.31,<3.1",
+    "python-dotenv==0.13.0",
+]

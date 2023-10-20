@@ -1,6 +1,6 @@
 
-from btctools.auth_proxy import AuthServiceProxy
-from matt import ContractManager
+from matt.btctools.auth_proxy import AuthServiceProxy
+from . import ContractManager
 
 
 class Environment:

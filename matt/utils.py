@@ -1,10 +1,10 @@
 from io import BytesIO
 from typing import Optional, Tuple
-from btctools.auth_proxy import AuthServiceProxy, JSONRPCException
 import time
 
-from btctools.messages import COutPoint, CTransaction
-from btctools.script import CScript, CScriptNum
+from .btctools.auth_proxy import AuthServiceProxy, JSONRPCException
+from .btctools.messages import COutPoint, CTransaction
+from .btctools.script import CScript, CScriptNum
 
 # We ignore the possibility of reorgs for simplicity.
 
