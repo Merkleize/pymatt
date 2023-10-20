@@ -334,17 +334,8 @@ def script_main(script_filename: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    # Non-interactive option
-    parser.add_argument("--non-interactive", "-n", action="store_true", help="Run in non-interactive mode")
-
     # Mine automatically option
     parser.add_argument("--mine-automatically", "-m", action="store_true", help="Mine automatically")
-
-    # Host option
-    parser.add_argument("--host", default="localhost", type=str, help="Host address (default: localhost)")
-
-    # Port option
-    parser.add_argument("--port", default=12345, type=int, help="Port number (default: 12345)")
 
     # Script file option
     parser.add_argument("--script", "-s", type=str, help="Execute commands from script file")
@@ -363,7 +354,7 @@ if __name__ == "__main__":
     V = Vault(None, 10, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
 
     manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
-    environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)
+    environment = Environment(rpc, manager, args.host, args.port, False)
 
     print(f"Vault address: {V.get_address()}\n")
 

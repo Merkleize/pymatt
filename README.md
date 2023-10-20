@@ -8,8 +8,8 @@ This repository contains a (very much Work In Progress) framework to create and 
 Optionally, create a python environment:
 
 ```bash
-$ python -m venv myenv
-$ source myenv/bin/activate 
+$ python -m venv venv
+$ source venv/bin/activate
 ```
 
 Install the library with:
