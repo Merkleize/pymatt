@@ -1,0 +1,6 @@
+fund amount=4999990000
+
+recover item=0
+
+printall
+

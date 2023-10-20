@@ -1,0 +1,11 @@
+fund amount=4999990000
+
+trigger items="[0]" outputs="[\"bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437:4999990000\"]"
+
+# make sure the timelock expires
+mine 10
+
+recover item=1
+
+printall
+
