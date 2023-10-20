@@ -39,6 +39,10 @@ RPC_PASSWORD = "rpcpass"
 RPC_PORT = "18443"
 ```
 
+NOTE: the examples do not handle fee management and will send transactions with 0 fees; those are rejected with the default settings of bitcoin-core.
+
+If not using the container above, please see an [example of custom bitcoin.conf](https://github.com/Merkleize/docker/blob/master/bitcoin.conf) to work with the scripts in this repository.
+
 # Case studies
 
 - [Vault](examples/vault)
