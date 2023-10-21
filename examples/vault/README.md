@@ -18,10 +18,14 @@ $ pip install -r requirements.txt
 
 To run the script, navigate to the directory containing `vault.py` and use the following command:
 
+```bash
+$ python vault.py -m
+```
+
 ## Command-line Arguments
 
-- `--mine-automatically` or `-m`: Enables automatic mining any time transactions are broadcast.
-- `--script` or `-s`: Executes commands from a specified script file, instead of running the interactive CLI interface.
+- `--mine-automatically` or `-m`: Enables automatic mining any time transactions are broadcast (assuming a wallet is loaded in bitcoin-core).
+- `--script` or `-s`: Executes commands from a specified script file, instead of running the interactive CLI interface. Some examples are in the (script)[scripts] folder.
 
 ## Interactive Commands
 
