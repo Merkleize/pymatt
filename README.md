@@ -23,7 +23,7 @@ $ pip install .
 The fastest way to get started is [this docker container](https://github.com/Merkleize/docker):
 
 ```bash
-$ docker pull docker pull bigspider/bitcoin_matt
+$ docker pull bigspider/bitcoin_matt
 
 $ docker run -d -p 18443:18443 bigspider/bitcoin_matt
 ```

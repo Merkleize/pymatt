@@ -2,12 +2,14 @@ from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from typing import Callable
+
+from .merkle import MerkleProof
 from .btctools import script, key
 from .btctools.auth_proxy import AuthServiceProxy
 from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness
 from .btctools.script import OP_1, CScript, CTxOut, TaprootInfo
 from .btctools.segwit_addr import encode_segwit_address
-from .utils import wait_for_output, wait_for_spending_tx
+from .utils import encode_wit_element, vch2bn, wait_for_output, wait_for_spending_tx
 
 # Flags for OP_CHECKCONTRACTVERIFY
 CCV_FLAG_CHECK_INPUT: int = -1
@@ -16,19 +18,6 @@ CCV_FLAG_DEDUCT_OUTPUT_AMOUNT: int = 2
 
 # point with provably unknown private key
 NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
-
-
-def vch2bn(s: bytes) -> int:
-    """Convert bitcoin-specific little endian format to number."""
-    if len(s) == 0:
-        return 0
-    # The most significant bit is the sign bit.
-    is_negative = s[0] & 0x80 != 0
-    # Mask off the sign bit.
-    s_abs = bytes([s[0] & 0x7f]) + s[1:]
-    v_abs = int.from_bytes(s_abs, 'little')
-    # Return as negative number if it's negative.
-    return -v_abs if is_negative else v_abs
 
 
 class AbstractContract:
@@ -70,7 +59,7 @@ class Clause:
         return f"<Clause(name={self.name}, script={self.script})>"
 
 
-StandardType = type[int] | type[bytes]
+StandardType = type[int] | type[bytes] | type[MerkleProof]
 
 
 ArgSpecs = list[tuple[str, StandardType]]
@@ -89,8 +78,15 @@ class StandardClause(Clause):
         self.next_outputs_fn = next_output_fn
 
         for _, arg_cls in self.arg_specs:
-            if arg_cls not in [int, bytes]:
-                raise ValueError(f"Unsupported type: {arg_cls.__name__}")
+            if isinstance (arg_cls, dict):
+                if arg_cls["cls"] == "merkleproof":
+                    # TODO: what do we check here?
+                    pass
+                else:
+                    raise ValueError(f"Unsupported object type: {arg_cls}")
+            elif arg_cls not in [int, bytes, dict]:
+                raise ValueError(f"Unsupported type: {arg_cls.__class__.__name__}")
+
 
     def next_outputs(self, args: dict) -> list[ClauseOutput] | CTransaction:
         if self.next_outputs_fn is not None:
@@ -104,29 +100,52 @@ class StandardClause(Clause):
             if arg_name not in args:
                 raise ValueError(f"Missing argument: {arg_name}")
             arg_value = args[arg_name]
-            if type(arg_value) != arg_cls:
-                raise ValueError(
-                    f"Argument {arg_name} must be of type {arg_cls.__name__}, not {type(arg_value).__name__}")
-            if arg_cls == int:
-                result.append(script.bn2vch(arg_value))
-            elif arg_cls == bytes:
-                result.append(arg_value)
+            if isinstance(arg_cls, dict):
+                if "cls" not in arg_cls:
+                    raise ValueError("Missing 'cls'")
+                if arg_cls["cls"] == "merkleproof":
+                    if not isinstance(arg_value, MerkleProof):
+                        raise ValueError("the value of a merkle proof must be a MerkleProof instance")
+                    result.extend(arg_value.to_wit_stack())
+                else:
+                    raise ValueError(f"Unexpected 'cls': {arg_cls['cls']}")
             else:
-                raise ValueError("Unexpected type")  # this should never happen
+                if type(arg_value) != arg_cls:
+                    raise ValueError(
+                        f"Argument {arg_name} must be of type {arg_cls.__name__}, not {type(arg_value).__name__}")
+                result.append(encode_wit_element(arg_value))
 
         return result
 
+    # TODO: refactor the arg_specs so that each type has a corresponding
+    # class that encapsulates the logic for encoding/decoding types to/from witness stack
+    # this will allow this function to be fully generic
     def args_from_stack_elements(self, elements: list[bytes]) -> dict:
         result: dict = {}
-        if len(elements) != len(self.arg_specs):
-            raise ValueError(f"Expected {len(self.arg_specs)} elements, not {len(elements)}")
+        # if len(elements) != len(self.arg_specs):
+        #     raise ValueError(f"Expected {len(self.arg_specs)} elements, not {len(elements)}")
+        j = 0
         for i, (arg_name, arg_cls) in enumerate(self.arg_specs):
+            assert j < len(elements)
+
             if arg_cls == int:
                 result[arg_name] = vch2bn(elements[i])
+                j = j + 1
             elif arg_cls == bytes:
                 result[arg_name] = elements[i]
+                j = j + 1
+            elif isinstance(arg_cls, dict):
+                if arg_cls["cls"] == "merkleproof":
+                    depth = arg_cls["depth"]
+                    n_proof_elements = 2 * depth + 1
+                    assert len(elements[j:]) >= n_proof_elements
+                    result[arg_name] = MerkleProof.from_wit_stack(elements[j:j + n_proof_elements])
+
+                    j = j + n_proof_elements
+                else:
+                    raise ValueError("Unexpected dict type")
             else:
-                raise ValueError("Unexpected type")  # this should never happen
+                raise ValueError("Unexpected type") 
         return result
 
     def __repr__(self):
@@ -279,6 +298,8 @@ class ContractInstance:
         self.contract = contract
         self.data = None if not self.is_augm() else b'\0'*32
 
+        self.data_expanded = None # TODO: figure out a good API for this
+
         self.last_height = 0
 
         self.status = ContractInstanceStatus.ABSTRACT
@@ -351,7 +372,7 @@ class ContractManager:
         if instance.is_augm():
             if instance.data is None:
                 raise ValueError("Data not set in instance")
-            scriptPubKey = instance.contract.get_tr_info(self.data).scriptPubKey
+            scriptPubKey = instance.contract.get_tr_info(instance.data).scriptPubKey
         else:
             scriptPubKey = instance.contract.get_tr_info().scriptPubKey
 

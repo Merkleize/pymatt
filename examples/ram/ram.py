@@ -1,7 +1,3 @@
-"""
-Vaults as described in https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-April/021588.html
-"""
-
 import argparse
 import json
 
@@ -20,13 +16,14 @@ from prompt_toolkit.history import FileHistory
 from matt.btctools.auth_proxy import AuthServiceProxy
 
 from matt.btctools import key
-from matt.btctools.messages import CTransaction, CTxIn, CTxOut
+from matt.btctools.messages import CTransaction, CTxIn, CTxOut, sha256
 from matt.btctools.segwit_addr import decode_segwit_address
 from matt.environment import Environment
 from matt import ContractInstance, ContractInstanceStatus, ContractManager
 from matt.utils import print_tx
+from matt.merkle import MerkleTree
 
-from vault_contracts import Unvaulting, Vault
+from ram_contracts import RAM
 
 logging.basicConfig(filename='matt-cli.log', level=logging.DEBUG)
 
@@ -36,9 +33,8 @@ class ActionArgumentCompleter(Completer):
         "fund": ["amount="],
         "list": [],
         "printall": [],
-        "recover": ["item="],
-        "trigger": ["items=\"[", "outputs=\"["],
-        "withdraw": ["item="], # TODO: allow multiple items?
+        "withdraw": ["item=", "leaf_index=", "outputs=\"["],
+        "write": ["item=", "leaf_index=", "new_value="],
     }
 
     def get_completions(self, document, complete_event):
@@ -153,154 +149,68 @@ def execute_command(input_line: str):
 
         for msg, tx in all_txs.values():
             print_tx(tx, msg)
-    elif action == "trigger":
-        items_idx = json.loads(args_dict["items"])
-        print("Triggering: ", items_idx)
-
-        if not isinstance(items_idx, list) or len(set(items_idx)) != len(items_idx):
-            raise ValueError("Invalid items")
-
-        spending_vaults: list[ContractInstance] = []
-        for idx in items_idx:
-            if idx >= len(manager.instances):
-                raise ValueError(f"No such instance: {idx}")
-            instance: ContractInstance = manager.instances[idx]
-            if instance.status != ContractInstanceStatus.FUNDED:
-                raise ValueError("Only FUNDED instances can be triggered")
-            if not isinstance(instance.contract, Vault):
-                raise ValueError("Only Vault instances can be triggered")
-
-            spending_vaults.append(manager.instances[idx])
-
-        inputs_total_amount = sum(ci.get_value() for ci in spending_vaults)
-
-        # construct the CTV template
-
-        ctv_tmpl = CTransaction()
-        ctv_tmpl.nVersion = 2
-        ctv_tmpl.vin = [CTxIn(nSequence=10)]
-        
+    elif action == "withdraw":
+        item_index = int(args_dict["item"])
+        leaf_index = int(args_dict["leaf_index"])
         outputs = parse_outputs(json.loads(args_dict["outputs"]))
-        outputs_total_amount = sum(out[1] for out in outputs)
 
-        if outputs_total_amount > inputs_total_amount:
-            print("Outputs amount is greater than inputs amount")
-            return
+        if item_index not in range(len(manager.instances)):
+            raise ValueError("Invalid item")
 
-        revault_amount = inputs_total_amount - outputs_total_amount
+        R_inst = manager.instances[item_index]
+        mt = MerkleTree(R_inst.data_expanded)
 
-        # prepare template hash
-        ctv_tmpl.vout = []
+        if leaf_index not in range(len(R_inst.data_expanded)):
+            raise ValueError("Invalid leaf index")
+
+        args = {
+            "merkle_root": mt.root,
+            "merkle_proof": mt.prove_leaf(leaf_index)
+        }
+
+        spend_tx, _ = manager.get_spend_tx(
+            (
+                manager.instances[item_index],
+                "withdraw",
+                args
+            )
+        )
+
+        # TODO: make utility function to create the vout easily
+        spend_tx.vout = []
         for address, amount in outputs:
-            ctv_tmpl.vout.append(CTxOut(
+            spend_tx.vout.append(CTxOut(
                     nValue=amount,
                     scriptPubKey=segwit_addr_to_scriptpubkey(address)
                 )
             )
 
-        # we assume the output is spent as first input later in the withdrawal transaction
-        ctv_hash = ctv_tmpl.get_standard_template_hash(nIn=0)
-
-        # sort vault UTXOs by decreasing amount value
-        sorted_spending_vaults = sorted(spending_vaults, key=lambda v: v.get_value(), reverse=True)
-
-        spends = []
-        for (i, v) in enumerate(sorted_spending_vaults):
-            if i == 0 and revault_amount > 0:
-                # if there's a revault amount, we split the largest UTXO and revault the difference.
-                # at this time, we don't support partially revaulting from multiple UTXOs
-                # (which might perhaps be useful for UTXO management in a real vault)
-                if revault_amount > v.get_value():
-                    raise ValueError(f"Input's amount {v.get_value()} is not enough for the revault amount {revault_amount}")
-                spends.append(
-                    (v, "trigger_and_revault", {"out_i": 0, "revault_out_i": 1, "ctv_hash": ctv_hash})
-                )
-            else:
-                spends.append(
-                    (v, "trigger", {"out_i": 0, "ctv_hash": ctv_hash})
-                )
-
-        spend_tx, sighashes = manager.get_spend_tx(spends, output_amounts={1: revault_amount})
-
-        spend_tx.wit.vtxinwit = []
-
-        sigs = [key.sign_schnorr(unvault_priv_key.privkey, sighash) for sighash in sighashes]
-
-        for i, (_, action, args) in enumerate(spends):
-            spend_tx.wit.vtxinwit.append(manager.get_spend_wit(
-                spending_vaults[i],
-                action,
-                {**args, "sig": sigs[i]}
-            ))
-
-
-        print("Waiting for trigger transaction to be confirmed...")
-        result = manager.spend_and_wait(spending_vaults, spend_tx)
-
-        # store the template for later reference
-        ctv_templates[ctv_hash] = ctv_tmpl
-
-        print("Done")
-
-    elif action == "recover":
-        item_idx = int(args_dict["item"])
-        instance = manager.instances[item_idx]
-        if instance.status != ContractInstanceStatus.FUNDED:
-            raise ValueError("Only FUNDED instances can be recovered")
-        if not isinstance(instance.contract, (Vault, Unvaulting)):
-            raise ValueError("Only Vault or Unvaulting instances can be recovered")
-
-        spend_tx, _ = manager.get_spend_tx((instance, "recover", {"out_i": 0}))
-
         spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-            instance,
-            "recover",
-            {"out_i": 0}
-        )]
-
-        print("Waiting for recover transaction to be confirmed...")
-        print(spend_tx)
-        result = manager.spend_and_wait(instance, spend_tx)
-        print("Done")
-
-    elif action == "withdraw":
-        item_idx = int(args_dict["item"])
-        instance = manager.instances[item_idx]
-        if instance.status != ContractInstanceStatus.FUNDED or not isinstance(instance.contract, Unvaulting):
-            raise ValueError("Only FUNDED, Unvaulting instances can be withdrawn")
-
-        ctv_hash = instance.data
-        spend_tx, _ = manager.get_spend_tx(
-            (instance, "withdraw", {"ctv_hash": ctv_hash})
-        )
-
-        # TODO: get_spend_wit this does not fill the transaction
-        # according to the template (which the manager doesn't know)
-        # Figure out a better way to let the framework handle this
-        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-            instance,
+            R_inst,
             "withdraw",
-            {"ctv_hash": ctv_hash}
+            args
         )]
 
-        spend_tx.nVersion = ctv_templates[ctv_hash].nVersion
-        spend_tx.nLockTime = ctv_templates[ctv_hash].nLockTime
-        spend_tx.vin[0].nSequence = ctv_templates[ctv_hash].vin[0].nSequence  # we assume only 1 input
-        spend_tx.vout = ctv_templates[ctv_hash].vout
+        print(mt.prove_leaf(leaf_index))
+        print(spend_tx)  # TODO: remove
 
-        print("Waiting for withdrawal to be confirmed...")
-        print(spend_tx)
-        result = manager.spend_and_wait(instance, spend_tx)
+        result = manager.spend_and_wait(R_inst, spend_tx)
+
         print("Done")
-
+    elif action == "write":
+        # TODO
+        raise NotImplementedError
     elif action == "fund":
         amount = int(args_dict["amount"])
-        V_inst = ContractInstance(V)
-        manager.add_instance(V_inst)
-        txid = rpc.sendtoaddress(V_inst.get_address(), amount/100_000_000)
+        R_inst = ContractInstance(R)
+        R_inst.data_expanded = list(map(lambda x : sha256(x.to_bytes(1, byteorder='little')), range(R.size)))
+        R_inst.data = MerkleTree(R_inst.data_expanded).root
+
+        manager.add_instance(R_inst)
+        txid = rpc.sendtoaddress(R_inst.get_address(), amount/100_000_000)
         print(f"Waiting for funding transaction {txid} to be confirmed...")
-        manager.wait_for_outpoint(V_inst, txid)
-        print(V_inst.funding_tx)
+        manager.wait_for_outpoint(R_inst, txid)
+        print(R_inst.funding_tx)
 
 
 def cli_main():
@@ -342,7 +252,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions = ["fund", "mine", "list", "printall", "recover", "trigger", "withdraw"]
+    actions = ["fund", "mine", "list", "printall", "withdraw"]
 
     unvault_priv_key = key.ExtendedKey.deserialize(
         "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
@@ -351,12 +261,10 @@ if __name__ == "__main__":
 
     rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
 
-    V = Vault(None, 10, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
+    R = RAM(8)
 
     manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
     environment = Environment(rpc, manager, None, None, False)
-
-    print(f"Vault address: {V.get_address()}\n")
 
     # map from known ctv hashes to the corresponding template (used for withdrawals)
     ctv_templates: dict[bytes, CTransaction] = {}

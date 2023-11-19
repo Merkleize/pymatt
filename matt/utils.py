@@ -4,7 +4,30 @@ import time
 
 from .btctools.auth_proxy import AuthServiceProxy, JSONRPCException
 from .btctools.messages import COutPoint, CTransaction
-from .btctools.script import CScript, CScriptNum
+from .btctools.script import CScript, CScriptNum, bn2vch
+
+
+def vch2bn(s: bytes) -> int:
+    """Convert bitcoin-specific little endian format to number."""
+    if len(s) == 0:
+        return 0
+    # The most significant bit is the sign bit.
+    is_negative = s[0] & 0x80 != 0
+    # Mask off the sign bit.
+    s_abs = bytes([s[0] & 0x7f]) + s[1:]
+    v_abs = int.from_bytes(s_abs, 'little')
+    # Return as negative number if it's negative.
+    return -v_abs if is_negative else v_abs
+
+
+def encode_wit_element(x: bytes | int) -> bytes:
+    if isinstance(x, int):
+        return bn2vch(x)
+    elif isinstance(x, bytes):
+        return x
+    else:
+        raise ValueError("Unexpected type")
+
 
 # We ignore the possibility of reorgs for simplicity.
 
