@@ -122,17 +122,16 @@ class StandardClause(Clause):
     # this will allow this function to be fully generic
     def args_from_stack_elements(self, elements: list[bytes]) -> dict:
         result: dict = {}
-        # if len(elements) != len(self.arg_specs):
-        #     raise ValueError(f"Expected {len(self.arg_specs)} elements, not {len(elements)}")
         j = 0
-        for i, (arg_name, arg_cls) in enumerate(self.arg_specs):
-            assert j < len(elements)
+        for _, (arg_name, arg_cls) in enumerate(self.arg_specs):
+            if j >= len(elements):
+                raise ValueError("Too few elements to decode")
 
             if arg_cls == int:
-                result[arg_name] = vch2bn(elements[i])
+                result[arg_name] = vch2bn(elements[j])
                 j = j + 1
             elif arg_cls == bytes:
-                result[arg_name] = elements[i]
+                result[arg_name] = elements[j]
                 j = j + 1
             elif isinstance(arg_cls, dict):
                 if arg_cls["cls"] == "merkleproof":
@@ -146,6 +145,10 @@ class StandardClause(Clause):
                     raise ValueError("Unexpected dict type")
             else:
                 raise ValueError("Unexpected type") 
+
+        if j != len(elements):
+            raise ValueError("Too many elements to decode")
+
         return result
 
     def __repr__(self):
@@ -224,7 +227,7 @@ class AugmentedP2TR(AbstractContract):
         return script.taproot_construct(internal_pubkey, self.get_scripts())
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()})"
+        return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()}. Contracts's data: {self.data})"
 
 
 class StandardP2TR(P2TR):

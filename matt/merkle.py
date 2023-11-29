@@ -107,7 +107,7 @@ class MerkleProof:
         x (bytes): An arbitrary bytes array.
     """
 
-    def __init__(self, hashes: list[bytes], directions: list[bytes], x: bytes):
+    def __init__(self, hashes: list[bytes], directions: list[int], x: bytes):
         """
         Initializes the MerkleProof with given hashes, directions, and an element x.
 
@@ -126,6 +126,26 @@ class MerkleProof:
         self.hashes = hashes
         self.directions = directions
         self.x = x
+
+    def get_leaf_index(self):
+        i = 0
+        for d in self.directions:
+            assert d == 0 or d == 1
+
+            i = 2*i + d
+        return i
+
+    def get_new_root_after_update(self, new_value: bytes):
+        assert len(new_value) == 32  # should already be hashed
+        r = new_value
+        for d, h in reversed(list(zip(self.directions, self.hashes))):
+            if d == 0:
+                # left child
+                r = sha256(r + h)
+            else:
+                # right child
+                r = sha256(h + r)
+        return r
 
     def to_wit_stack(self):
         """
@@ -302,4 +322,8 @@ class MerkleTree:
 
             node = node.parent
 
-        return MerkleProof(list(reversed(proof)), get_directions(len(self), index), x)
+        return MerkleProof(
+            list(reversed(proof)),
+            [int(b) for b in get_directions(len(self), index)],
+            x
+        )

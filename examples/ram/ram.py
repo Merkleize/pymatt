@@ -191,19 +191,52 @@ def execute_command(input_line: str):
             args
         )]
 
-        print(mt.prove_leaf(leaf_index))
-        print(spend_tx)  # TODO: remove
-
         result = manager.spend_and_wait(R_inst, spend_tx)
 
         print("Done")
     elif action == "write":
-        # TODO
-        raise NotImplementedError
+        item_index = int(args_dict["item"])
+        leaf_index = int(args_dict["leaf_index"])
+        new_value = sha256(bytes.fromhex(args_dict["new_value"]))
+
+        if item_index not in range(len(manager.instances)):
+            raise ValueError("Invalid item")
+
+        R_inst = manager.instances[item_index]
+        mt = MerkleTree(R_inst.data_expanded)
+
+        if leaf_index not in range(len(R_inst.data_expanded)):
+            raise ValueError("Invalid leaf index")
+
+        args = {
+            "merkle_root": mt.root,
+            "new_value": new_value,
+            "merkle_proof": mt.prove_leaf(leaf_index),
+        }
+
+        spend_tx, _ = manager.get_spend_tx(
+            (
+                manager.instances[item_index],
+                "write",
+                args
+            )
+        )
+
+        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
+            R_inst,
+            "write",
+            args
+        )]
+
+        result = manager.spend_and_wait(R_inst, spend_tx)
+
+        print("Done")
     elif action == "fund":
         amount = int(args_dict["amount"])
-        R_inst = ContractInstance(R)
-        R_inst.data_expanded = list(map(lambda x : sha256(x.to_bytes(1, byteorder='little')), range(R.size)))
+        data = [sha256(i.to_bytes(1, byteorder='little')) for i in range(8)]
+
+        R_inst = ContractInstance(RAM(len(data)))
+        R_inst.data_expanded = data
         R_inst.data = MerkleTree(R_inst.data_expanded).root
 
         manager.add_instance(R_inst)
@@ -252,7 +285,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    actions = ["fund", "mine", "list", "printall", "withdraw"]
+    actions = ["fund", "mine", "list", "printall", "withdraw", "write"]
 
     unvault_priv_key = key.ExtendedKey.deserialize(
         "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
@@ -260,8 +293,6 @@ if __name__ == "__main__":
         "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
     rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
-
-    R = RAM(8)
 
     manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
     environment = Environment(rpc, manager, None, None, False)
