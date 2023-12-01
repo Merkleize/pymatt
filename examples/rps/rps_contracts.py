@@ -1,3 +1,4 @@
+from matt.argtypes import BytesType, IntType
 from matt.btctools.messages import CTransaction, CTxIn, CTxOut, sha256
 from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
 from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
@@ -42,8 +43,8 @@ class RPSGameS0(StandardP2TR):
                 OP_CHECKCONTRACTVERIFY,
             ]),
             arg_specs=[
-                ('m_b', int),
-                ('bob_sig', bytes),
+                ('m_b', IntType()),
+                ('bob_sig', BytesType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(n=0, next_contract=S1, next_data=sha256(bn2vch(args['m_b'])))]
         )
@@ -140,9 +141,9 @@ class RPSGameS1(StandardAugmentedP2TR):
         tmpl_tie = make_ctv_hash(self.stake, self.stake)
 
         arg_specs = [
-            ('m_b', int),
-            ('m_a', int),
-            ('r_a', bytes),
+            ('m_b', IntType()),
+            ('m_a', IntType()),
+            ('r_a', BytesType()),
         ]
         alice_wins = StandardClause("tie", make_script(0, tmpl_alice_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_alice_wins)
         bob_wins = StandardClause("bob_wins", make_script(1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_bob_wins)

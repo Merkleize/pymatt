@@ -1,3 +1,4 @@
+from matt.argtypes import BytesType, IntType
 from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DROP, OP_DUP, OP_SWAP, OP_TRUE, CScript
 from matt import CCV_FLAG_CHECK_INPUT, CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY, ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
@@ -26,9 +27,9 @@ class Vault(StandardP2TR):
                 OP_CHECKSIG
             ]),
             arg_specs=[
-                ('sig', bytes),
-                ('ctv_hash', bytes),
-                ('out_i', int),
+                ('sig', BytesType()),
+                ('ctv_hash', BytesType()),
+                ('out_i', IntType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash'])]
         )
@@ -54,10 +55,10 @@ class Vault(StandardP2TR):
                 OP_CHECKSIG
             ]),
             arg_specs=[
-                ('sig', bytes),
-                ('ctv_hash', bytes),
-                ('out_i', int),
-                ('revault_out_i', int),
+                ('sig', BytesType()),
+                ('ctv_hash', BytesType()),
+                ('out_i', IntType()),
+                ('revault_out_i', IntType()),
             ],
             next_output_fn=lambda args: [
                 ClauseOutput(n=args['revault_out_i'], next_contract=self,  next_amount=ClauseOutputAmountBehaviour.DEDUCT_OUTPUT),
@@ -78,7 +79,7 @@ class Vault(StandardP2TR):
                 OP_TRUE
             ]),
             arg_specs=[
-                ('out_i', int),
+                ('out_i', IntType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
@@ -133,7 +134,7 @@ class Unvaulting(StandardAugmentedP2TR):
                 OP_TRUE
             ]),
             arg_specs=[
-                ('out_i', int),
+                ('out_i', IntType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )

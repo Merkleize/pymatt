@@ -230,6 +230,10 @@ def execute_command(input_line: str):
 
         result = manager.spend_and_wait(R_inst, spend_tx)
 
+        assert len(result) == 1
+
+        result[0].data_expanded = R_inst.data_expanded[:leaf_index] + [new_value] + R_inst.data_expanded[leaf_index+1:]
+
         print("Done")
     elif action == "fund":
         amount = int(args_dict["amount"])

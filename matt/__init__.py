@@ -3,13 +3,13 @@ from enum import Enum
 from io import BytesIO
 from typing import Callable
 
-from .merkle import MerkleProof
+from .argtypes import ArgType
 from .btctools import script, key
 from .btctools.auth_proxy import AuthServiceProxy
 from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness
 from .btctools.script import OP_1, CScript, CTxOut, TaprootInfo
 from .btctools.segwit_addr import encode_segwit_address
-from .utils import encode_wit_element, vch2bn, wait_for_output, wait_for_spending_tx
+from .utils import wait_for_output, wait_for_spending_tx
 
 # Flags for OP_CHECKCONTRACTVERIFY
 CCV_FLAG_CHECK_INPUT: int = -1
@@ -59,33 +59,18 @@ class Clause:
         return f"<Clause(name={self.name}, script={self.script})>"
 
 
-StandardType = type[int] | type[bytes] | type[MerkleProof]
-
-
-ArgSpecs = list[tuple[str, StandardType]]
-
-
 # A StandardClause encodes simple scripts where the witness is exactly
 # a list of arguments, always in the same order, and each is either
 # an integer or a byte array.
 # Other types of generic treatable clauses could be defined (for example, a MiniscriptClause).
 # Moreover, it specifies a function that converts the arguments of the clause, to the data of the next output.
 class StandardClause(Clause):
-    def __init__(self, name: str, script: CScript, arg_specs: ArgSpecs, next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction] | None = None):
+    def __init__(self, name: str, script: CScript, arg_specs: list[tuple[str, ArgType]], next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction] | None = None):
         super().__init__(name, script)
         self.arg_specs = arg_specs
 
         self.next_outputs_fn = next_output_fn
 
-        for _, arg_cls in self.arg_specs:
-            if isinstance (arg_cls, dict):
-                if arg_cls["cls"] == "merkleproof":
-                    # TODO: what do we check here?
-                    pass
-                else:
-                    raise ValueError(f"Unsupported object type: {arg_cls}")
-            elif arg_cls not in [int, bytes, dict]:
-                raise ValueError(f"Unsupported type: {arg_cls.__class__.__name__}")
 
 
     def next_outputs(self, args: dict) -> list[ClauseOutput] | CTransaction:
@@ -100,53 +85,23 @@ class StandardClause(Clause):
             if arg_name not in args:
                 raise ValueError(f"Missing argument: {arg_name}")
             arg_value = args[arg_name]
-            if isinstance(arg_cls, dict):
-                if "cls" not in arg_cls:
-                    raise ValueError("Missing 'cls'")
-                if arg_cls["cls"] == "merkleproof":
-                    if not isinstance(arg_value, MerkleProof):
-                        raise ValueError("the value of a merkle proof must be a MerkleProof instance")
-                    result.extend(arg_value.to_wit_stack())
-                else:
-                    raise ValueError(f"Unexpected 'cls': {arg_cls['cls']}")
-            else:
-                if type(arg_value) != arg_cls:
-                    raise ValueError(
-                        f"Argument {arg_name} must be of type {arg_cls.__name__}, not {type(arg_value).__name__}")
-                result.append(encode_wit_element(arg_value))
+
+            result.extend(arg_cls.serialize_to_wit(arg_value))
 
         return result
 
-    # TODO: refactor the arg_specs so that each type has a corresponding
-    # class that encapsulates the logic for encoding/decoding types to/from witness stack
-    # this will allow this function to be fully generic
     def args_from_stack_elements(self, elements: list[bytes]) -> dict:
-        result: dict = {}
-        j = 0
-        for _, (arg_name, arg_cls) in enumerate(self.arg_specs):
-            if j >= len(elements):
+        result = {}
+        cur = 0
+        for arg_name, arg_cls in self.arg_specs:
+            if cur >= len(elements):
                 raise ValueError("Too few elements to decode")
 
-            if arg_cls == int:
-                result[arg_name] = vch2bn(elements[j])
-                j = j + 1
-            elif arg_cls == bytes:
-                result[arg_name] = elements[j]
-                j = j + 1
-            elif isinstance(arg_cls, dict):
-                if arg_cls["cls"] == "merkleproof":
-                    depth = arg_cls["depth"]
-                    n_proof_elements = 2 * depth + 1
-                    assert len(elements[j:]) >= n_proof_elements
-                    result[arg_name] = MerkleProof.from_wit_stack(elements[j:j + n_proof_elements])
+            n_consumed, value = arg_cls.deserialize_from_wit(elements[cur:])
+            result[arg_name] = value
+            cur += n_consumed
 
-                    j = j + n_proof_elements
-                else:
-                    raise ValueError("Unexpected dict type")
-            else:
-                raise ValueError("Unexpected type") 
-
-        if j != len(elements):
+        if cur != len(elements):
             raise ValueError("Too many elements to decode")
 
         return result
