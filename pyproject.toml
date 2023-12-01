@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "matt"
 version = "0.0.1"
 authors = [
-    {name = "Salvatore Ingala", email = "salvatore.ingala@protonmail.com"},
+    {name = "Salvatore Ingala", email = "salvatoshi@protonmail.com"},
 ]
 description = "Merkleize All The Things"
 readme = "README.md"
