@@ -34,7 +34,7 @@ def encode_wit_element(x: bytes | int) -> bytes:
 def wait_for_output(
     rpc_connection: AuthServiceProxy,
     script_pub_key: bytes,
-    poll_interval=1,
+    poll_interval: float = 1,
     starting_height: Optional[int] = None,
     txid: Optional[str] = None,
     min_amount: Optional[int] = None
@@ -78,7 +78,7 @@ def wait_for_output(
         time.sleep(poll_interval)
 
 
-def wait_for_spending_tx(rpc_connection: AuthServiceProxy, outpoint: COutPoint, poll_interval=1, starting_height: Optional[int] = None) -> Tuple[CTransaction, int, int]:
+def wait_for_spending_tx(rpc_connection: AuthServiceProxy, outpoint: COutPoint, poll_interval: float = 1, starting_height: Optional[int] = None) -> Tuple[CTransaction, int, int]:
     # Initialize the last block height using the provided starting_height or the current block height
     last_block_height = max(starting_height - 1, 0) if starting_height is not None else rpc_connection.getblockcount()
 

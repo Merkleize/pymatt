@@ -305,10 +305,11 @@ class ContractInstance:
 
 
 class ContractManager:
-    def __init__(self, contract_instances: list[ContractInstance], rpc: AuthServiceProxy, *, mine_automatically=False):
+    def __init__(self, contract_instances: list[ContractInstance], rpc: AuthServiceProxy, *, poll_interval: float = 1, mine_automatically: bool = False):
         self.instances = contract_instances
         self.mine_automatically = mine_automatically
         self.rpc = rpc
+        self.poll_interval = poll_interval
 
     def _check_instance(self, instance: ContractInstance, exp_statuses: None | ContractInstanceStatus | list[ContractInstanceStatus] = None):
         if exp_statuses is not None:
@@ -337,7 +338,7 @@ class ContractManager:
         if self.mine_automatically:
             self._mine_blocks(1)
 
-        instance.outpoint, instance.last_height = wait_for_output(self.rpc, scriptPubKey, txid=txid)
+        instance.outpoint, instance.last_height = wait_for_output(self.rpc, scriptPubKey, txid=txid, poll_interval=self.poll_interval)
 
         funding_tx_raw = self.rpc.getrawtransaction(instance.outpoint.hash.to_bytes(32, byteorder="big").hex())
         funding_tx = CTransaction()
@@ -486,7 +487,8 @@ class ContractManager:
             tx, vin, instance.last_height = wait_for_spending_tx(
                 self.rpc,
                 instance.outpoint,
-                starting_height=instance.last_height
+                starting_height=instance.last_height,
+                poll_interval = self.poll_interval
             )
             tx.rehash()
 
