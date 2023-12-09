@@ -10,6 +10,7 @@ import os
 import logging
 import shlex
 import traceback
+from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv
 
@@ -81,7 +82,7 @@ def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
     ])
 
 
-def parse_outputs(output_strings: list[str]) -> list[tuple[str, int]]:
+def parse_outputs(output_strings: List[str]) -> List[Tuple[str, int]]:
     """Parses a list of strings in the form "address:amount" into a list of (address, amount) tuples.
     
     Args:
@@ -160,7 +161,7 @@ def execute_command(input_line: str):
         if not isinstance(items_idx, list) or len(set(items_idx)) != len(items_idx):
             raise ValueError("Invalid items")
 
-        spending_vaults: list[ContractInstance] = []
+        spending_vaults: List[ContractInstance] = []
         for idx in items_idx:
             if idx >= len(manager.instances):
                 raise ValueError(f"No such instance: {idx}")
@@ -343,7 +344,7 @@ if __name__ == "__main__":
     print(f"Vault address: {V.get_address()}\n")
 
     # map from known ctv hashes to the corresponding template (used for withdrawals)
-    ctv_templates: dict[bytes, CTransaction] = {}
+    ctv_templates: Dict[bytes, CTransaction] = {}
 
 
     if args.script:

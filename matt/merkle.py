@@ -102,18 +102,18 @@ class MerkleProof:
     a certain element from the root, along with the value of the element itself.
 
     Attributes:
-        hashes (list[bytes]): A list of hashes (h_1, ..., h_n), each 32 bytes long.
-        directions (list[int]): A list of directions (d_1, ..., d_n), where each direction is either 0 (left) or 1 (right).
+        hashes (List[bytes]): A list of hashes (h_1, ..., h_n), each 32 bytes long.
+        directions (List[int]): A list of directions (d_1, ..., d_n), where each direction is either 0 (left) or 1 (right).
         x (bytes): An arbitrary bytes array.
     """
 
-    def __init__(self, hashes: list[bytes], directions: list[int], x: bytes):
+    def __init__(self, hashes: List[bytes], directions: List[int], x: bytes):
         """
         Initializes the MerkleProof with given hashes, directions, and an element x.
 
         Args:
-            hashes (list[bytes]): A list of 32-byte long hashes.
-            directions (list[int]): A list of directions, each being 0 or 1.
+            hashes (List[bytes]): A list of 32-byte long hashes.
+            directions (List[int]): A list of directions, each being 0 or 1.
             x (bytes): An arbitrary bytes array.
         """
         if not all(isinstance(h, bytes) and len(h) == 32 for h in hashes):
@@ -154,7 +154,7 @@ class MerkleProof:
         """
         return [encode_wit_element(t) for pair in zip(self.hashes, self.directions) for t in pair] + [self.x]
 
-    def from_wit_stack(wit_stack: list[bytes]):
+    def from_wit_stack(wit_stack: List[bytes]):
         """
         Constructs a MerkleProof instance from a given witness stack.
         

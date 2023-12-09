@@ -28,7 +28,7 @@ bob_signer = SchnorrSigner(bob_key)
 def test_rps(manager: ContractManager):
     m_a = moves["rock"]
 
-    r_a = random.randbytes(32)
+    r_a = bytes([random.randint(0, 255) for _ in range(32)])
     c_a = RPS.calculate_hash(m_a, r_a)
 
     S0 = RPSGameS0(alice_key.pubkey[1:], bob_key.pubkey[1:], c_a)

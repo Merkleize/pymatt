@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Callable, Optional
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from .argtypes import ArgType, SignerType
 from .btctools import script, key
@@ -32,9 +32,9 @@ class ClauseOutputAmountBehaviour(Enum):
 
 @dataclass
 class ClauseOutput:
-    n: None | int
+    n: Optional[int]
     next_contract: AbstractContract  # only StandardP2TR and StandardAugmentedP2TR are supported so far
-    next_data: None | bytes = None  # only meaningful if c is augmented
+    next_data: Optional[bytes] = None  # only meaningful if c is augmented
     next_amount: ClauseOutputAmountBehaviour = ClauseOutputAmountBehaviour.PRESERVE_OUTPUT
 
     def __repr__(self):
@@ -46,13 +46,13 @@ class Clause:
         self.name = name
         self.script = script
 
-    def stack_elements_from_args(self, args: dict) -> list[bytes]:
+    def stack_elements_from_args(self, args: dict) -> List[bytes]:
         raise NotImplementedError
 
-    def next_outputs(self, args: dict) -> list[ClauseOutput]:
+    def next_outputs(self, args: dict) -> List[ClauseOutput]:
         raise NotImplementedError
 
-    def args_from_stack_elements(self, elements: list[bytes]) -> dict:
+    def args_from_stack_elements(self, elements: List[bytes]) -> dict:
         raise NotImplementedError
 
     def __repr__(self):
@@ -65,7 +65,7 @@ class Clause:
 # Other types of generic treatable clauses could be defined (for example, a MiniscriptClause).
 # Moreover, it specifies a function that converts the arguments of the clause, to the data of the next output.
 class StandardClause(Clause):
-    def __init__(self, name: str, script: CScript, arg_specs: list[tuple[str, ArgType]], next_output_fn: Callable[[dict], list[ClauseOutput] | CTransaction] | None = None):
+    def __init__(self, name: str, script: CScript, arg_specs: List[Tuple[str, ArgType]], next_output_fn: Optional[Callable[[dict], Union[List[ClauseOutput], CTransaction]]] = None):
         super().__init__(name, script)
         self.arg_specs = arg_specs
 
@@ -73,14 +73,14 @@ class StandardClause(Clause):
 
 
 
-    def next_outputs(self, args: dict) -> list[ClauseOutput] | CTransaction:
+    def next_outputs(self, args: dict) -> Union[List[ClauseOutput], CTransaction]:
         if self.next_outputs_fn is not None:
             return self.next_outputs_fn(args)
         else:
             return []
 
-    def stack_elements_from_args(self, args: dict) -> list[bytes]:
-        result: list[bytes] = []
+    def stack_elements_from_args(self, args: dict) -> List[bytes]:
+        result: List[bytes] = []
         for arg_name, arg_cls in self.arg_specs:
             if arg_name not in args:
                 raise ValueError(f"Missing argument: {arg_name}")
@@ -90,7 +90,7 @@ class StandardClause(Clause):
 
         return result
 
-    def args_from_stack_elements(self, elements: list[bytes]) -> dict:
+    def args_from_stack_elements(self, elements: List[bytes]) -> dict:
         result = {}
         cur = 0
         for arg_name, arg_cls in self.arg_specs:
@@ -138,7 +138,7 @@ class P2TR(AbstractContract):
     A class representing a Pay-to-Taproot script.
     """
 
-    def __init__(self, internal_pubkey: bytes, scripts: list[tuple[str, CScript]]):
+    def __init__(self, internal_pubkey: bytes, scripts: List[Tuple[str, CScript]]):
         assert len(internal_pubkey) == 32
 
         self.internal_pubkey = internal_pubkey
@@ -167,7 +167,7 @@ class AugmentedP2TR(AbstractContract):
 
         self.naked_internal_pubkey = naked_internal_pubkey
 
-    def get_scripts(self) -> list[tuple[str, CScript]]:
+    def get_scripts(self) -> List[Tuple[str, CScript]]:
         raise NotImplementedError("This must be implemented in subclasses")
 
     def get_taptree(self) -> bytes:
@@ -190,15 +190,15 @@ class StandardP2TR(P2TR):
     A StandardP2TR where all the transitions are given by a StandardClause.
     """
 
-    def __init__(self, internal_pubkey: bytes, clauses: list[StandardClause]):
+    def __init__(self, internal_pubkey: bytes, clauses: List[StandardClause]):
         super().__init__(internal_pubkey, list(map(lambda x: (x.name, x.script), clauses)))
         self.clauses = clauses
         self._clauses_dict = {clause.name: clause for clause in clauses}
 
-    def get_scripts(self) -> list[tuple[str, CScript]]:
+    def get_scripts(self) -> List[Tuple[str, CScript]]:
         return list(map(lambda clause: (clause.name, clause.script), self.clauses))
 
-    def decode_wit_stack(self, stack_elems: list[bytes]) -> tuple[str, dict]:
+    def decode_wit_stack(self, stack_elems: List[bytes]) -> Tuple[str, dict]:
         leaf_hash = stack_elems[-2]
 
         clause_name = None
@@ -220,15 +220,15 @@ class StandardAugmentedP2TR(AugmentedP2TR):
     An AugmentedP2TR where all the transitions are given by a StandardClause.
     """
 
-    def __init__(self, naked_internal_pubkey: bytes, clauses: list[StandardClause]):
+    def __init__(self, naked_internal_pubkey: bytes, clauses: List[StandardClause]):
         super().__init__(naked_internal_pubkey)
         self.clauses = clauses
         self._clauses_dict = {clause.name: clause for clause in clauses}
 
-    def get_scripts(self) -> list[tuple[str, CScript]]:
+    def get_scripts(self) -> List[Tuple[str, CScript]]:
         return list(map(lambda clause: (clause.name, clause.script), self.clauses))
 
-    def decode_wit_stack(self, data: bytes, stack_elems: list[bytes]) -> tuple[str, dict]:
+    def decode_wit_stack(self, data: bytes, stack_elems: List[bytes]) -> Tuple[str, dict]:
         leaf_hash = stack_elems[-2]
 
         clause_name = None
@@ -252,7 +252,7 @@ class StandardAugmentedP2TR(AugmentedP2TR):
 # would include other info to help the signer decide (e.g.: the transaction)
 # There are no bad people here, though, so we keep it simple for now.
 class SchnorrSigner:
-    def __init__(self, keys: key.ExtendedKey | list[key.ExtendedKey]):
+    def __init__(self, keys: Union[key.ExtendedKey, List[key.ExtendedKey]]):
         if not isinstance(keys, list):
             keys = [keys]
 
@@ -262,7 +262,7 @@ class SchnorrSigner:
 
         self.keys = keys
 
-    def sign(self, msg: bytes, pubkey: bytes) -> bytes | None:
+    def sign(self, msg: bytes, pubkey: bytes) -> Optional[bytes]:
         if len(msg) != 32:
             raise ValueError("msg should be 32 bytes long")
         if len(pubkey) != 32:
@@ -282,7 +282,7 @@ class ContractInstanceStatus(Enum):
 
 
 class ContractInstance:
-    def __init__(self, contract: StandardP2TR | StandardAugmentedP2TR):
+    def __init__(self, contract: Union[StandardP2TR, StandardAugmentedP2TR]):
         self.contract = contract
         self.data = None if not self.is_augm() else b'\0'*32
 
@@ -293,10 +293,10 @@ class ContractInstance:
         self.last_height = 0
 
         self.status = ContractInstanceStatus.ABSTRACT
-        self.outpoint: COutPoint | None = None
-        self.funding_tx: CTransaction | None = None
+        self.outpoint: Optional[COutPoint] = None
+        self.funding_tx: Optional[CTransaction] = None
 
-        self.spending_tx: CTransaction | None = None
+        self.spending_tx: Optional[CTransaction] = None
         self.spending_vin = None
 
         self.spending_clause = None
@@ -323,7 +323,7 @@ class ContractInstance:
             raise ValueError("contract not funded, or funding transaction unknown")
         return self.funding_tx.vout[self.outpoint.n].nValue
 
-    def decode_wit_stack(self, stack_elems: list[bytes]) -> tuple[str, dict]:
+    def decode_wit_stack(self, stack_elems: List[bytes]) -> Tuple[str, dict]:
         if self.is_augm():
             return self.contract.decode_wit_stack(self.data, stack_elems)
         else:
@@ -335,7 +335,7 @@ class ContractInstance:
             value = self.funding_tx.vout[self.outpoint.n].nValue
         return f"{self.__class__.__name__}(contract={self.contract}, data={self.data if self.data is None else self.data.hex()}, value={value}, status={self.status}, outpoint={self.outpoint})"
 
-    def __call__(self, clause_name: str, *, signer: Optional[SchnorrSigner] = None, outputs: list[CTxOut] = [], **kwargs) -> list['ContractInstance']:
+    def __call__(self, clause_name: str, *, signer: Optional[SchnorrSigner] = None, outputs: List[CTxOut] = [], **kwargs) -> List['ContractInstance']:
         if self.manager is None:
             raise ValueError("Direct invocation is only allowed after adding the instance to a ContractManager")
 
@@ -346,13 +346,13 @@ class ContractInstance:
 
 
 class ContractManager:
-    def __init__(self, contract_instances: list[ContractInstance], rpc: AuthServiceProxy, *, poll_interval: float = 1, mine_automatically: bool = False):
+    def __init__(self, contract_instances: List[ContractInstance], rpc: AuthServiceProxy, *, poll_interval: float = 1, mine_automatically: bool = False):
         self.instances = contract_instances
         self.mine_automatically = mine_automatically
         self.rpc = rpc
         self.poll_interval = poll_interval
 
-    def _check_instance(self, instance: ContractInstance, exp_statuses: None | ContractInstanceStatus | list[ContractInstanceStatus] = None):
+    def _check_instance(self, instance: ContractInstance, exp_statuses: Optional[Union[ContractInstanceStatus, List[ContractInstanceStatus]]] = None):
         if exp_statuses is not None:
             if isinstance(exp_statuses, ContractInstanceStatus):
                 if instance.status != exp_statuses:
@@ -371,7 +371,7 @@ class ContractManager:
         instance.manager = self
         self.instances.append(instance)
 
-    def wait_for_outpoint(self, instance: ContractInstance, txid: str | None = None):
+    def wait_for_outpoint(self, instance: ContractInstance, txid: Optional[str] = None):
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.ABSTRACT)
         if instance.is_augm():
             if instance.data is None:
@@ -394,15 +394,15 @@ class ContractManager:
 
     def get_spend_tx(
             self,
-            spends: tuple[ContractInstance, str, dict] | list[tuple[ContractInstance, str, dict]],
-            output_amounts: dict[int, int] = {}
-        ) -> tuple[CTransaction, list[bytes]]:
+            spends: Union[Tuple[ContractInstance, str, dict], List[Tuple[ContractInstance, str, dict]]],
+            output_amounts: Dict[int, int] = {}
+        ) -> Tuple[CTransaction, List[bytes]]:
         if not isinstance(spends, list):
             spends = [spends]
 
         tx = CTransaction()
         tx.nVersion = 2
-        outputs_map: dict[int, CTxOut] = {}
+        outputs_map: Dict[int, CTxOut] = {}
 
         tx.vin = [CTxIn(outpoint=instance.outpoint) for instance, _, _ in spends]
 
@@ -464,7 +464,7 @@ class ContractManager:
             tx.vout = [outputs_map[i] for i in range(len(outputs_map))]
 
         # TODO: generalize for keypath spend?
-        sighashes: list[bytes] = []
+        sighashes: List[bytes] = []
         spent_utxos = []
 
         # TODO: simplify
@@ -501,11 +501,11 @@ class ContractManager:
         ]
         return in_wit
 
-    def _mine_blocks(self, n_blocks: int = 1) -> list[str]:
+    def _mine_blocks(self, n_blocks: int = 1) -> List[str]:
         address = self.rpc.getnewaddress()
         return self.rpc.generatetoaddress(n_blocks, address)
 
-    def spend_and_wait(self, instances: ContractInstance | list[ContractInstance], tx: CTransaction) -> list[ContractInstance]:
+    def spend_and_wait(self, instances: Union[ContractInstance, List[ContractInstance]], tx: CTransaction) -> List[ContractInstance]:
         if isinstance(instances, ContractInstance):
             instances = [instances]
 
@@ -520,11 +520,11 @@ class ContractManager:
             self._mine_blocks(1)
         return self.wait_for_spend(instances)
 
-    def wait_for_spend(self, instances: ContractInstance | list[ContractInstance]) -> list[ContractInstance]:
+    def wait_for_spend(self, instances: Union[ContractInstance, List[ContractInstance]]) -> List[ContractInstance]:
         if isinstance(instances, ContractInstance):
             instances = [instances]
 
-        out_contracts: dict[int, ContractInstance] = {}
+        out_contracts: Dict[int, ContractInstance] = {}
 
         for instance in instances:
             self._check_instance(instance, exp_statuses=ContractInstanceStatus.FUNDED)
@@ -590,7 +590,7 @@ class ContractManager:
             self.add_instance(instance)
         return result
 
-    def fund_instance(self, contract: StandardP2TR | StandardAugmentedP2TR, amount: int, data: Optional[bytes] = None) -> ContractInstance:
+    def fund_instance(self, contract: Union[StandardP2TR, StandardAugmentedP2TR], amount: int, data: Optional[bytes] = None) -> ContractInstance:
         """
         Convenience method to create an instance of a contract, add it to the ContractManager,
         and send a transaction to fund it with a certain amount.
@@ -609,7 +609,7 @@ class ContractManager:
         self.wait_for_outpoint(instance, txid)
         return instance
 
-    def spend_instance(self, instance: ContractInstance, clause_name: str, args: dict, *, signer: Optional[SchnorrSigner], outputs: Optional[list[CTxOut]] = None) -> list[ContractInstance]:
+    def spend_instance(self, instance: ContractInstance, clause_name: str, args: dict, *, signer: Optional[SchnorrSigner], outputs: Optional[List[CTxOut]] = None) -> List[ContractInstance]:
         """
         Creates and broadcasts a transaction that spends a contract instance using a specified clause and arguments.
 

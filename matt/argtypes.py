@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Any, List, Tuple
 from abc import ABC, abstractmethod
 
 from .merkle import MerkleProof
@@ -13,7 +13,7 @@ class ArgType(ABC):
     contract clauses.
 
     Methods:
-        serialize_to_wit(self, value: Any) -> list[bytes]:
+        serialize_to_wit(self, value: Any) -> List[bytes]:
             Serializes the provided value into a format suitable for inclusion
             in a witness stack. This method must be overridden in subclasses.
 
@@ -25,7 +25,7 @@ class ArgType(ABC):
                 A list of one or more witness arguments, serialized in the format of
                 the witness stack.
 
-        deserialize_from_wit(self, wit_stack: list[bytes]) -> Tuple[int, Any]:
+        deserialize_from_wit(self, wit_stack: List[bytes]) -> Tuple[int, Any]:
             Deserializes data from a witness stack into a Python object. This
             method must be overridden in subclasses.
 
@@ -41,27 +41,27 @@ class ArgType(ABC):
                   object depends on the subclass implementation.
     """
     @abstractmethod
-    def serialize_to_wit(self, value: Any) -> list[bytes]:
+    def serialize_to_wit(self, value: Any) -> List[bytes]:
         raise NotImplementedError()
 
     @abstractmethod
-    def deserialize_from_wit(self, wit_stack: list[bytes]) -> Tuple[int, Any]:
+    def deserialize_from_wit(self, wit_stack: List[bytes]) -> Tuple[int, Any]:
         raise NotImplementedError()
 
 
 class IntType(ArgType):
-    def serialize_to_wit(self, value: int) -> list[bytes]:
+    def serialize_to_wit(self, value: int) -> List[bytes]:
         return [encode_wit_element(value)]
 
-    def deserialize_from_wit(self, wit_stack: list[bytes]) -> Tuple[int, int]:
+    def deserialize_from_wit(self, wit_stack: List[bytes]) -> Tuple[int, int]:
         return 1, vch2bn(wit_stack[0])
 
 
 class BytesType(ArgType):
-    def serialize_to_wit(self, value: int) -> list[bytes]:
+    def serialize_to_wit(self, value: int) -> List[bytes]:
         return [encode_wit_element(value)]
 
-    def deserialize_from_wit(self, wit_stack: list[bytes]) -> Tuple[int, bytes]:
+    def deserialize_from_wit(self, wit_stack: List[bytes]) -> Tuple[int, bytes]:
         return 1, wit_stack[0]
 
 
@@ -81,10 +81,10 @@ class MerkleProofType(ArgType):
     def __init__(self, depth: int):
         self.depth = depth
 
-    def serialize_to_wit(self, value: MerkleProof) -> list[bytes]:
+    def serialize_to_wit(self, value: MerkleProof) -> List[bytes]:
         return value.to_wit_stack()
 
-    def deserialize_from_wit(self, wit_stack: list[bytes]) -> Tuple[int, MerkleProof]:
+    def deserialize_from_wit(self, wit_stack: List[bytes]) -> Tuple[int, MerkleProof]:
         n_proof_elements = 2 * self.depth + 1
         if len(wit_stack) < n_proof_elements:
             raise ValueError("Witness stack too short")

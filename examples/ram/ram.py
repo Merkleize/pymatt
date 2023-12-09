@@ -1,4 +1,5 @@
 import argparse
+from ast import Tuple
 import json
 
 import os
@@ -6,6 +7,7 @@ import os
 import logging
 import shlex
 import traceback
+from typing import Dict, List
 
 from dotenv import load_dotenv
 
@@ -63,7 +65,7 @@ rpc_host = os.getenv("RPC_HOST", "localhost")
 rpc_port = os.getenv("RPC_PORT", 18443)
 
 
-def parse_outputs(output_strings: list[str]) -> list[tuple[str, int]]:
+def parse_outputs(output_strings: List[str]) -> List[Tuple[str, int]]:
     """Parses a list of strings in the form "address:amount" into a list of (address, amount) tuples.
     
     Args:
@@ -250,7 +252,7 @@ if __name__ == "__main__":
     environment = Environment(rpc, manager, None, None, False)
 
     # map from known ctv hashes to the corresponding template (used for withdrawals)
-    ctv_templates: dict[bytes, CTransaction] = {}
+    ctv_templates: Dict[bytes, CTransaction] = {}
 
 
     if args.script:

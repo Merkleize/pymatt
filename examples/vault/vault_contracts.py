@@ -1,10 +1,11 @@
+from typing import Optional
 from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DROP, OP_DUP, OP_SWAP, OP_TRUE, CScript
 from matt import CCV_FLAG_CHECK_INPUT, CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY, ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
 
 class Vault(StandardP2TR):
-    def __init__(self, alternate_pk: bytes | None, spend_delay: int, recover_pk: bytes, unvault_pk: bytes):
+    def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes, unvault_pk: bytes):
         assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32 and len(unvault_pk)
 
         self.alternate_pk = alternate_pk
@@ -88,7 +89,7 @@ class Vault(StandardP2TR):
 
 
 class Unvaulting(StandardAugmentedP2TR):
-    def __init__(self, alternate_pk: bytes | None, spend_delay: int, recover_pk: bytes):
+    def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes):
         assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32
 
         self.alternate_pk = alternate_pk

@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 import time
 
 from .btctools.auth_proxy import AuthServiceProxy, JSONRPCException
@@ -21,7 +21,7 @@ def vch2bn(s: bytes) -> int:
     return -v_abs if is_negative else v_abs
 
 
-def encode_wit_element(x: bytes | int) -> bytes:
+def encode_wit_element(x: Union[bytes, int]) -> bytes:
     if isinstance(x, int):
         return bn2vch(x)
     elif isinstance(x, bytes):
@@ -175,7 +175,7 @@ def addr_to_script(addr: str) -> bytes:
     ])
 
 
-def make_ctv_template(outputs: list[(bytes|str, int)], *, nVersion: int = 2, nSequence: int = 0) -> CTransaction:
+def make_ctv_template(outputs: List[(Union[bytes, str, int])], *, nVersion: int = 2, nSequence: int = 0) -> CTransaction:
     tmpl = CTransaction()
     tmpl.nVersion = nVersion
     tmpl.vin = [CTxIn(nSequence=nSequence)]

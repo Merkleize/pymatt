@@ -1,4 +1,5 @@
 
+from typing import Optional
 from matt.btctools.auth_proxy import AuthServiceProxy
 from . import ContractManager
 
@@ -11,7 +12,7 @@ class Environment:
         self.port = port
         self.interactive = interactive
 
-    def prompt(self, message: str | None = None):
+    def prompt(self, message: Optional[str] = None):
         if message is not None:
             print(message)
         if self.interactive:

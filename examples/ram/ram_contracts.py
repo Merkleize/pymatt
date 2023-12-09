@@ -1,3 +1,4 @@
+from typing import List
 from matt.argtypes import BytesType, MerkleProofType
 from matt.btctools.script import OP_CAT, OP_CHECKCONTRACTVERIFY, OP_DUP, OP_ELSE, OP_ENDIF, OP_EQUAL, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_NOTIF, OP_PICK, OP_ROLL, OP_ROT, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_TRUE, CScript
 from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, ClauseOutput, StandardClause, StandardAugmentedP2TR
@@ -5,7 +6,7 @@ from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, ClauseOutput, StandardClause, S
 from matt.merkle import is_power_of_2, floor_lg
 
 class RAM(StandardAugmentedP2TR):
-    def __init__(self, size: list[bytes]):
+    def __init__(self, size: List[bytes]):
         assert is_power_of_2(size)
 
         self.size = size
