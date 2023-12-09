@@ -250,18 +250,7 @@ def execute_command(input_line: str):
         if not isinstance(instance.contract, (Vault, Unvaulting)):
             raise ValueError("Only Vault or Unvaulting instances can be recovered")
 
-        spend_tx, _ = manager.get_spend_tx((instance, "recover", {"out_i": 0}))
-
-        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-            instance,
-            "recover",
-            {"out_i": 0}
-        )]
-
-        print("Waiting for recover transaction to be confirmed...")
-        print(spend_tx)
-        result = manager.spend_and_wait(instance, spend_tx)
-        print("Done")
+        instance("recover", out_i=0)
 
     elif action == "withdraw":
         item_idx = int(args_dict["item"])
@@ -274,7 +263,7 @@ def execute_command(input_line: str):
             (instance, "withdraw", {"ctv_hash": ctv_hash})
         )
 
-        # TODO: get_spend_wit this does not fill the transaction
+        # TODO: get_spend_wit does not fill the transaction
         # according to the template (which the manager doesn't know)
         # Figure out a better way to let the framework handle this
         spend_tx.wit.vtxinwit = [manager.get_spend_wit(
@@ -295,12 +284,7 @@ def execute_command(input_line: str):
 
     elif action == "fund":
         amount = int(args_dict["amount"])
-        V_inst = ContractInstance(V)
-        manager.add_instance(V_inst)
-        txid = rpc.sendtoaddress(V_inst.get_address(), amount/100_000_000)
-        print(f"Waiting for funding transaction {txid} to be confirmed...")
-        manager.wait_for_outpoint(V_inst, txid)
-        print(V_inst.funding_tx)
+        manager.fund_instance(V, amount)
 
 
 def cli_main():

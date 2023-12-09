@@ -16,11 +16,10 @@ from prompt_toolkit.history import FileHistory
 from matt.btctools.auth_proxy import AuthServiceProxy
 
 from matt.btctools import key
-from matt.btctools.messages import CTransaction, CTxIn, CTxOut, sha256
-from matt.btctools.segwit_addr import decode_segwit_address
+from matt.btctools.messages import CTransaction, CTxOut, sha256
 from matt.environment import Environment
-from matt import ContractInstance, ContractInstanceStatus, ContractManager
-from matt.utils import print_tx
+from matt import ContractManager
+from matt.utils import addr_to_script, print_tx
 from matt.merkle import MerkleTree
 
 from ram_contracts import RAM
@@ -62,19 +61,6 @@ rpc_user = os.getenv("RPC_USER", "rpcuser")
 rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
 rpc_host = os.getenv("RPC_HOST", "localhost")
 rpc_port = os.getenv("RPC_PORT", 18443)
-
-
-def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
-    wit_ver, wit_prog = decode_segwit_address("bcrt", addr)
-
-    if wit_ver is None or wit_prog is None:
-        raise ValueError(f"Invalid segwit address (or wrong network): {addr}")
-
-    return bytes([
-        wit_ver + (0x50 if wit_ver > 0 else 0),
-        len(wit_prog),
-        *wit_prog
-    ])
 
 
 def parse_outputs(output_strings: list[str]) -> list[tuple[str, int]]:
@@ -152,7 +138,7 @@ def execute_command(input_line: str):
     elif action == "withdraw":
         item_index = int(args_dict["item"])
         leaf_index = int(args_dict["leaf_index"])
-        outputs = parse_outputs(json.loads(args_dict["outputs"]))
+        outputs_amounts = parse_outputs(json.loads(args_dict["outputs"]))
 
         if item_index not in range(len(manager.instances)):
             raise ValueError("Invalid item")
@@ -163,35 +149,17 @@ def execute_command(input_line: str):
         if leaf_index not in range(len(R_inst.data_expanded)):
             raise ValueError("Invalid leaf index")
 
-        args = {
-            "merkle_root": mt.root,
-            "merkle_proof": mt.prove_leaf(leaf_index)
-        }
-
-        spend_tx, _ = manager.get_spend_tx(
-            (
-                manager.instances[item_index],
-                "withdraw",
-                args
-            )
-        )
-
-        # TODO: make utility function to create the vout easily
-        spend_tx.vout = []
-        for address, amount in outputs:
-            spend_tx.vout.append(CTxOut(
+        outputs=[]
+        for address, amount in outputs_amounts:
+            outputs.append(CTxOut(
                     nValue=amount,
-                    scriptPubKey=segwit_addr_to_scriptpubkey(address)
+                    scriptPubKey=addr_to_script(address)
                 )
             )
 
-        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-            R_inst,
-            "withdraw",
-            args
-        )]
-
-        result = manager.spend_and_wait(R_inst, spend_tx)
+        R_inst("withdraw",
+               outputs=outputs,
+               merkle_root=mt.root, merkle_proof=mt.prove_leaf(leaf_index))
 
         print("Done")
     elif action == "write":
@@ -208,27 +176,11 @@ def execute_command(input_line: str):
         if leaf_index not in range(len(R_inst.data_expanded)):
             raise ValueError("Invalid leaf index")
 
-        args = {
-            "merkle_root": mt.root,
-            "new_value": new_value,
-            "merkle_proof": mt.prove_leaf(leaf_index),
-        }
-
-        spend_tx, _ = manager.get_spend_tx(
-            (
-                manager.instances[item_index],
-                "write",
-                args
-            )
+        result = R_inst("write",
+               merkle_root=mt.root,
+               new_value=new_value,
+               merkle_proof=mt.prove_leaf(leaf_index)
         )
-
-        spend_tx.wit.vtxinwit = [manager.get_spend_wit(
-            R_inst,
-            "write",
-            args
-        )]
-
-        result = manager.spend_and_wait(R_inst, spend_tx)
 
         assert len(result) == 1
 
@@ -237,16 +189,12 @@ def execute_command(input_line: str):
         print("Done")
     elif action == "fund":
         amount = int(args_dict["amount"])
-        data = [sha256(i.to_bytes(1, byteorder='little')) for i in range(8)]
+        content = [sha256(i.to_bytes(1, byteorder='little')) for i in range(8)]
 
-        R_inst = ContractInstance(RAM(len(data)))
-        R_inst.data_expanded = data
-        R_inst.data = MerkleTree(R_inst.data_expanded).root
+        R_inst = manager.fund_instance(RAM(len(content)), amount, data=MerkleTree(content).root)
 
-        manager.add_instance(R_inst)
-        txid = rpc.sendtoaddress(R_inst.get_address(), amount/100_000_000)
-        print(f"Waiting for funding transaction {txid} to be confirmed...")
-        manager.wait_for_outpoint(R_inst, txid)
+        R_inst.data_expanded = content
+
         print(R_inst.funding_tx)
 
 

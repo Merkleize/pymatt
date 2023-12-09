@@ -51,7 +51,7 @@ import matt.btctools.key as key
 from matt.btctools.messages import sha256
 import matt.btctools.script as script
 from matt.environment import Environment
-from matt import ContractInstance, ContractManager
+from matt import ContractInstance, ContractManager, SchnorrSigner
 
 from rps_contracts import DEFAULT_STAKE, RPS, RPSGameS0
 
@@ -102,15 +102,13 @@ class AliceGame:
 
         # Create initial smart contract UTXO
         S0 = RPSGameS0(pk_a, pk_b, c_a)
-        C = ContractInstance(S0)
-        M.add_instance(C)
 
         if self.args.mine_automatically:
-            print("Broadcasting funding transaction")
-            environment.rpc.sendtoaddress(C.get_address(), 2 * DEFAULT_STAKE / 100_000_000)
-
-        print(f"Alice waiting for output: {C.get_address()}")
-        M.wait_for_outpoint(C)
+            C = manager.fund_instance(S0, 2 * DEFAULT_STAKE)
+        else:
+            C = ContractInstance(S0)
+            M.add_instance(C)
+            M.wait_for_outpoint(C)
 
         # Wait for bob to spend it
 
@@ -128,17 +126,9 @@ class AliceGame:
         outcome = RPS.adjudicate(m_a, m_b)
         print(f"Game result: {outcome}")
 
-        args = {
-            "m_a": m_a,
-            "m_b": m_b,
-            "r_a": r_a,
-        }
-        tx_payout, _ = M.get_spend_tx([(C2, outcome, args)])
-        tx_payout.wit.vtxinwit = [M.get_spend_wit(C2, outcome, args)]
-
         self.env.prompt("Broadcasting adjudication transaction")
+        C2(outcome, m_a=m_a, m_b=m_b,r_a=r_a)
 
-        M.spend_and_wait(C2, tx_payout)
 
         s.close()
 
@@ -185,15 +175,9 @@ class BobGame:
         print(f"Bob's move: {m_b} ({RPS.move_str(m_b)})")
         print(f"Bob's move's hash: {m_b_hash.hex()}")
 
-        tx, [sighash] = M.get_spend_tx([(C, "bob_move", {'m_b': m_b})])
-
-        bob_sig = key.sign_schnorr(self.priv_key.privkey, sighash)
-
-        tx.wit.vtxinwit = [M.get_spend_wit(C, "bob_move", {'m_b': m_b, 'bob_sig': bob_sig})]
-
         self.env.prompt("Broadcasting Bob's move transaction")
 
-        [C2] = M.spend_and_wait([C], tx)
+        [C2] = C("bob_move", signer=SchnorrSigner(self.priv_key), m_b=m_b)
 
         txid = C.spending_tx.hash
         print(f"Bob's move broadcasted: {m_b}. txid: {txid}")
