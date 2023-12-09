@@ -67,7 +67,7 @@ class BytesType(ArgType):
 
 class SignerType(BytesType):
     """
-    This is a special for arguments that represent signatures in tapscripts.
+    This is a special type for arguments that represent signatures in tapscripts.
     It is encoded as bytes, but labeling it allows the ContractManager to get the correct
     signatures by calling SchnorrSigner object instances.
     """

@@ -598,7 +598,7 @@ class ContractManager:
         instance = ContractInstance(contract)
 
         if isinstance(contract, StandardP2TR) and data is not None:
-            raise ValueError("The data must None for a contract with no embedded data")
+            raise ValueError("The data must be None for a contract with no embedded data")
 
         if isinstance(contract, StandardAugmentedP2TR):
             if data is None:
