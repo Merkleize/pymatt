@@ -40,7 +40,6 @@ and play the moves when it's their turn, as per the rules.
 import argparse
 import socket
 import json
-import hashlib
 import random
 import os
 
@@ -54,7 +53,7 @@ import matt.btctools.script as script
 from matt.environment import Environment
 from matt import ContractInstance, ContractManager
 
-from rps_contracts import DEFAULT_STAKE, RPSGameS0
+from rps_contracts import DEFAULT_STAKE, RPS, RPSGameS0
 
 
 load_dotenv()
@@ -63,36 +62,6 @@ rpc_user = os.getenv("RPC_USER", "rpcuser")
 rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
 rpc_host = os.getenv("RPC_HOST", "localhost")
 rpc_port = os.getenv("RPC_PORT", 18443)
-
-
-class RPS:
-    @staticmethod
-    def move_str(move: int) -> str:
-        assert 0 <= move <= 2
-        if move == 0:
-            return "rock"
-        elif move == 1:
-            return "paper"
-        else:
-            return "scissors"
-
-    @staticmethod
-    def adjudicate(move_alice, move_bob):
-        assert 0 <= move_alice <= 2 and 0 <= move_bob <= 2
-        if move_bob == move_alice:
-            return "tie"
-        elif (move_bob - move_alice) % 3 == 2:
-            return "alice_wins"
-        else:
-            return "bob_wins"
-
-    @staticmethod
-    def calculate_hash(move: int, r: bytes) -> bytes:
-        assert 0 <= move <= 2 and len(r) == 32
-
-        m = hashlib.sha256()
-        m.update(script.bn2vch(move) + r)
-        return m.digest()
 
 
 class AliceGame:

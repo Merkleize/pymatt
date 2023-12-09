@@ -3,8 +3,9 @@ from typing import Optional, Tuple
 import time
 
 from .btctools.auth_proxy import AuthServiceProxy, JSONRPCException
-from .btctools.messages import COutPoint, CTransaction
+from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxOut
 from .btctools.script import CScript, CScriptNum, bn2vch
+from .btctools.segwit_addr import decode_segwit_address
 
 
 def vch2bn(s: bytes) -> int:
@@ -156,3 +157,33 @@ f'''
 </details>
 
 ''')
+
+
+def addr_to_script(addr: str) -> bytes:
+    # only for segwit/taproot on regtest
+    # TODO: generalize to other address types, and other networks (currently, it assumes regtest)
+
+    wit_ver, wit_prog = decode_segwit_address("bcrt", addr)
+
+    if wit_ver is None or wit_prog is None:
+        raise ValueError(f"Invalid segwit address (or wrong network): {addr}")
+
+    return bytes([
+        wit_ver + (0x50 if wit_ver > 0 else 0),
+        len(wit_prog),
+        *wit_prog
+    ])
+
+
+def make_ctv_template(outputs: list[(bytes|str, int)], *, nVersion: int = 2, nSequence: int = 0) -> CTransaction:
+    tmpl = CTransaction()
+    tmpl.nVersion = nVersion
+    tmpl.vin = [CTxIn(nSequence=nSequence)]
+    for dest, amount in outputs:
+        tmpl.vout.append(
+            CTxOut(
+                nValue=amount,
+                scriptPubKey=dest if isinstance(dest, bytes) else addr_to_script(dest)
+            )
+        )
+    return tmpl

@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Callable
+from typing import Callable, Optional
 
-from .argtypes import ArgType
+from .argtypes import ArgType, SignerType
 from .btctools import script, key
 from .btctools.auth_proxy import AuthServiceProxy
 from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness
@@ -245,6 +245,36 @@ class StandardAugmentedP2TR(AugmentedP2TR):
         return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()})"
 
 
+# Encapsulates a blind signer for one or more known keys.
+# Used byt the ContractManager to sign for the clause arguments of SignerType type.
+#
+# In the real world, we wouldn't blindly sign a hash, so the `sign` method
+# would include other info to help the signer decide (e.g.: the transaction)
+# There are no bad people here, though, so we keep it simple for now.
+class SchnorrSigner:
+    def __init__(self, keys: key.ExtendedKey | list[key.ExtendedKey]):
+        if not isinstance(keys, list):
+            keys = [keys]
+
+        for key in keys:
+            if not key.is_private:
+                raise ValueError("The SchnorrSigner needs the private keys")
+
+        self.keys = keys
+
+    def sign(self, msg: bytes, pubkey: bytes) -> bytes | None:
+        if len(msg) != 32:
+            raise ValueError("msg should be 32 bytes long")
+        if len(pubkey) != 32:
+            raise ValueError("pubkey should be an x-only pubkey")
+
+        for k in self.keys:
+            if k.pubkey[1:] == pubkey:
+                return key.sign_schnorr(k.privkey, msg)
+        
+        return None
+
+
 class ContractInstanceStatus(Enum):
     ABSTRACT = 0
     FUNDED = 1
@@ -257,6 +287,8 @@ class ContractInstance:
         self.data = None if not self.is_augm() else b'\0'*32
 
         self.data_expanded = None # TODO: figure out a good API for this
+
+        self.manager: ContractManager = None
 
         self.last_height = 0
 
@@ -303,6 +335,15 @@ class ContractInstance:
             value = self.funding_tx.vout[self.outpoint.n].nValue
         return f"{self.__class__.__name__}(contract={self.contract}, data={self.data if self.data is None else self.data.hex()}, value={value}, status={self.status}, outpoint={self.outpoint})"
 
+    def __call__(self, clause_name: str, *, signer: Optional[SchnorrSigner] = None, outputs: list[CTxOut] = [], **kwargs) -> list['ContractInstance']:
+        if self.manager is None:
+            raise ValueError("Direct invocation is only allowed after adding the instance to a ContractManager")
+
+        if self.status != ContractInstanceStatus.FUNDED:
+            raise ValueError("Only implemented for FUNDED instances")
+
+        return self.manager.spend_instance(self, clause_name, kwargs, signer=signer, outputs=outputs)
+
 
 class ContractManager:
     def __init__(self, contract_instances: list[ContractInstance], rpc: AuthServiceProxy, *, poll_interval: float = 1, mine_automatically: bool = False):
@@ -324,6 +365,10 @@ class ContractManager:
             raise ValueError("Instance not in this manager")
 
     def add_instance(self, instance: ContractInstance):
+        if instance.manager is not None:
+            raise ValueError("The instance can only be added to one ContractManager")
+
+        instance.manager = self
         self.instances.append(instance)
 
     def wait_for_outpoint(self, instance: ContractInstance, txid: str | None = None):
@@ -543,4 +588,55 @@ class ContractManager:
         result = list(out_contracts.values())
         for instance in result:
             self.add_instance(instance)
+        return result
+
+    def fund_instance(self, contract: StandardP2TR | StandardAugmentedP2TR, amount: int, data: Optional[bytes] = None) -> ContractInstance:
+        """
+        Convenience method to create an instance of a contract, add it to the ContractManager,
+        and send a transaction to fund it with a certain amount.
+        """
+        instance = ContractInstance(contract)
+
+        if isinstance(contract, StandardP2TR) and data is not None:
+            raise ValueError("The data must None for a contract with no embedded data")
+
+        if isinstance(contract, StandardAugmentedP2TR):
+            if data is None:
+                raise ValueError("The data must be provided for an augmented P2TR contract instance")
+            instance.data = data
+        self.add_instance(instance)
+        txid = self.rpc.sendtoaddress(instance.get_address(), amount/100_000_000)
+        self.wait_for_outpoint(instance, txid)
+        return instance
+
+    def spend_instance(self, instance: ContractInstance, clause_name: str, args: dict, *, signer: Optional[SchnorrSigner], outputs: Optional[list[CTxOut]] = None) -> list[ContractInstance]:
+        """
+        Creates and broadcasts a transaction that spends a contract instance using a specified clause and arguments.
+
+        :param instance: The ContractInstance to spend from.
+        :param clause_name: The name of the clause to be executed in the contract.
+        :param args: A dictionary of arguments required for the clause.
+        :param outputs: if not None, a list of CTxOut to add at the end of the list of
+                        outputs generated by the clause.
+        :return: A list of ContractInstances resulting from the spend transaction.
+        """
+        spend_tx, sighashes = self.get_spend_tx((instance, clause_name, args))
+
+        assert len(sighashes) == 1
+
+        sighash = sighashes[0]
+
+        if outputs is not None:
+            spend_tx.vout.extend(outputs)
+
+        clause = instance.contract._clauses_dict[clause_name]  # TODO: refactor, accessing private member
+        for arg_name, arg_type in clause.arg_specs:
+            if isinstance(arg_type, SignerType):
+                if signer is None:
+                    raise ValueError("No signer was provided, but the witness requires signatures")
+                args[arg_name] = signer.sign(sighash, arg_type.pubkey)
+
+        spend_tx.wit.vtxinwit = [self.get_spend_wit(instance, clause_name, args)]
+        result = self.spend_and_wait(instance, spend_tx)
+
         return result

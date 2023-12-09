@@ -1,9 +1,43 @@
-from matt.argtypes import BytesType, IntType
-from matt.btctools.messages import CTransaction, CTxIn, CTxOut, sha256
+import hashlib
+
+from matt.argtypes import BytesType, IntType, SignerType
+from matt.btctools.messages import sha256
+from matt.btctools import script
 from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
 from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY, P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from matt.utils import make_ctv_template
 
 DEFAULT_STAKE: int = 1000  # amount of sats that the players bet
+
+
+class RPS:
+    @staticmethod
+    def move_str(move: int) -> str:
+        assert 0 <= move <= 2
+        if move == 0:
+            return "rock"
+        elif move == 1:
+            return "paper"
+        else:
+            return "scissors"
+
+    @staticmethod
+    def adjudicate(move_alice, move_bob):
+        assert 0 <= move_alice <= 2 and 0 <= move_bob <= 2
+        if move_bob == move_alice:
+            return "tie"
+        elif (move_bob - move_alice) % 3 == 2:
+            return "alice_wins"
+        else:
+            return "bob_wins"
+
+    @staticmethod
+    def calculate_hash(move: int, r: bytes) -> bytes:
+        assert 0 <= move <= 2 and len(r) == 32
+
+        m = hashlib.sha256()
+        m.update(script.bn2vch(move) + r)
+        return m.digest()
 
 
 # params:
@@ -44,7 +78,7 @@ class RPSGameS0(StandardP2TR):
             ]),
             arg_specs=[
                 ('m_b', IntType()),
-                ('bob_sig', BytesType()),
+                ('bob_sig', SignerType(bob_pk)),
             ],
             next_output_fn=lambda args: [ClauseOutput(n=0, next_contract=S1, next_data=sha256(bn2vch(args['m_b'])))]
         )
@@ -116,29 +150,15 @@ class RPSGameS1(StandardAugmentedP2TR):
                 OP_CHECKTEMPLATEVERIFY
             ])
 
-        def make_ctv_hash(alice_amount, bob_amount) -> CTransaction:
-            tmpl = CTransaction()
-            tmpl.nVersion = 2
-            tmpl.vin = [CTxIn(nSequence=0)]
-            if alice_amount > 0:
-                tmpl.vout.append(
-                    CTxOut(
-                        nValue=alice_amount,
-                        scriptPubKey=P2TR(self.alice_pk, []).get_tr_info().scriptPubKey
-                    )
-                )
-            if bob_amount > 0:
-                tmpl.vout.append(
-                    CTxOut(
-                        nValue=bob_amount,
-                        scriptPubKey=P2TR(self.bob_pk, []).get_tr_info().scriptPubKey
-                    )
-                )
-            return tmpl
+        alice_spk = P2TR(self.alice_pk, []).get_tr_info().scriptPubKey
+        bob_spk = P2TR(self.bob_pk, []).get_tr_info().scriptPubKey
 
-        tmpl_alice_wins = make_ctv_hash(2*self.stake, 0)
-        tmpl_bob_wins = make_ctv_hash(0, 2*self.stake)
-        tmpl_tie = make_ctv_hash(self.stake, self.stake)
+        tmpl_alice_wins = make_ctv_template([(alice_spk, 2*self.stake)])
+        tmpl_bob_wins = make_ctv_template([(bob_spk, 2*self.stake)])
+        tmpl_tie = make_ctv_template([
+            (alice_spk, self.stake),
+            (bob_spk, self.stake),
+        ])
 
         arg_specs = [
             ('m_b', IntType()),

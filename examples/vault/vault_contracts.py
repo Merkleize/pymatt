@@ -1,4 +1,4 @@
-from matt.argtypes import BytesType, IntType
+from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DROP, OP_DUP, OP_SWAP, OP_TRUE, CScript
 from matt import CCV_FLAG_CHECK_INPUT, CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY, ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
 
@@ -27,7 +27,7 @@ class Vault(StandardP2TR):
                 OP_CHECKSIG
             ]),
             arg_specs=[
-                ('sig', BytesType()),
+                ('sig', SignerType(unvault_pk)),
                 ('ctv_hash', BytesType()),
                 ('out_i', IntType()),
             ],
@@ -55,7 +55,7 @@ class Vault(StandardP2TR):
                 OP_CHECKSIG
             ]),
             arg_specs=[
-                ('sig', BytesType()),
+                ('sig', SignerType(unvault_pk)),
                 ('ctv_hash', BytesType()),
                 ('out_i', IntType()),
                 ('revault_out_i', IntType()),
@@ -117,7 +117,7 @@ class Unvaulting(StandardAugmentedP2TR):
                 OP_CHECKTEMPLATEVERIFY
             ]),
             arg_specs=[
-                ('ctv_hash', bytes)
+                ('ctv_hash', BytesType())
             ]
         )
 
