@@ -153,7 +153,7 @@ def execute_command(input_line: str):
                 all_txs[instance.spending_tx.hash] = (instance.contract.__class__.__name__, instance.spending_tx)
 
         for msg, tx in all_txs.values():
-            format_tx_markdown(tx, msg)
+            print(format_tx_markdown(tx, msg))
     elif action == "trigger":
         items_idx = json.loads(args_dict["items"])
         print("Triggering: ", items_idx)
