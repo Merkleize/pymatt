@@ -27,3 +27,8 @@ def rpc_test_wallet():
 @pytest.fixture
 def manager(rpc):
     return ContractManager([], rpc, mine_automatically=True, poll_interval=0.01)
+
+@pytest.fixture(scope="session")
+def report_file():
+    with open("report.md", "w") as file:
+        yield file

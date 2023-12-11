@@ -21,7 +21,7 @@ from matt.btctools import key
 from matt.btctools.messages import CTransaction, CTxOut, sha256
 from matt.environment import Environment
 from matt import ContractManager
-from matt.utils import addr_to_script, print_tx
+from matt.utils import addr_to_script, format_tx_markdown
 from matt.merkle import MerkleTree
 
 from ram_contracts import RAM
@@ -136,7 +136,7 @@ def execute_command(input_line: str):
                 all_txs[instance.spending_tx.hash] = (instance.contract.__class__.__name__, instance.spending_tx)
 
         for msg, tx in all_txs.values():
-            print_tx(tx, msg)
+            print(format_tx_markdown(tx, msg))
     elif action == "withdraw":
         item_index = int(args_dict["item"])
         leaf_index = int(args_dict["leaf_index"])

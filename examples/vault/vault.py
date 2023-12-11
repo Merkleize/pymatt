@@ -25,7 +25,7 @@ from matt.btctools.messages import CTransaction, CTxIn, CTxOut
 from matt.btctools.segwit_addr import decode_segwit_address
 from matt.environment import Environment
 from matt import ContractInstance, ContractInstanceStatus, ContractManager
-from matt.utils import print_tx
+from matt.utils import format_tx_markdown
 
 from vault_contracts import Unvaulting, Vault
 
@@ -153,7 +153,7 @@ def execute_command(input_line: str):
                 all_txs[instance.spending_tx.hash] = (instance.contract.__class__.__name__, instance.spending_tx)
 
         for msg, tx in all_txs.values():
-            print_tx(tx, msg)
+            format_tx_markdown(tx, msg)
     elif action == "trigger":
         items_idx = json.loads(args_dict["items"])
         print("Triggering: ", items_idx)

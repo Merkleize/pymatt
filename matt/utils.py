@@ -145,9 +145,8 @@ def _pprint_tx(tx: CTransaction) -> str:
 
 
 # Utilities to print transactions
-def print_tx(tx: CTransaction, title: str):
-    print(
-f'''
+def format_tx_markdown(tx: CTransaction, title: str) -> str:
+    return f'''
 <details><summary>{title}<i>({tx.get_vsize()} vB)</i></summary>
 
 ```python
@@ -156,7 +155,7 @@ f'''
 
 </details>
 
-''')
+'''
 
 
 def addr_to_script(addr: str) -> bytes:
