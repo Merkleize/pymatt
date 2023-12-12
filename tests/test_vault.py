@@ -3,10 +3,11 @@ import pytest
 
 from examples.vault.vault_contracts import Vault
 
-from matt import ContractManager, OpaqueP2TR, SchnorrSigner
 from matt.btctools import key
 from matt.btctools.auth_proxy import AuthServiceProxy, JSONRPCException
 from matt.btctools.messages import CTxOut
+from matt.contracts import OpaqueP2TR
+from matt.manager import ContractManager, SchnorrSigner
 from matt.utils import format_tx_markdown, make_ctv_template
 
 from test_utils import mine_blocks

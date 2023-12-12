@@ -1,5 +1,6 @@
 """
-Vaults as described in https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-April/021588.html
+Vaults similar to those described in https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-April/021588.html,
+with several updates to implement the missing OP_VAULT features.
 """
 
 import argparse
@@ -19,12 +20,11 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 
 from matt.btctools.auth_proxy import AuthServiceProxy
-
 from matt.btctools import key
 from matt.btctools.messages import CTransaction, CTxIn, CTxOut
 from matt.btctools.segwit_addr import decode_segwit_address
 from matt.environment import Environment
-from matt import ContractInstance, ContractInstanceStatus, ContractManager
+from matt.manager import ContractInstance, ContractInstanceStatus, ContractManager
 from matt.utils import format_tx_markdown
 
 from vault_contracts import Unvaulting, Vault
@@ -57,9 +57,6 @@ class ActionArgumentCompleter(Completer):
                 if argument not in document.text and argument.startswith(word_before_cursor):
                     yield Completion(argument, start_position=-len(word_before_cursor))
 
-
-# point with provably unknown private key
-NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
 
 load_dotenv()
 

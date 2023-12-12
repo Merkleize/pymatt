@@ -1,7 +1,8 @@
 
 from typing import Optional
-from matt.btctools.auth_proxy import AuthServiceProxy
-from . import ContractManager
+
+from .btctools.auth_proxy import AuthServiceProxy
+from .manager import ContractManager
 
 
 class Environment:

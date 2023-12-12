@@ -1,5 +1,4 @@
 import argparse
-from ast import Tuple
 import json
 
 import os
@@ -7,7 +6,7 @@ import os
 import logging
 import shlex
 import traceback
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv
 
@@ -20,9 +19,9 @@ from matt.btctools.auth_proxy import AuthServiceProxy
 from matt.btctools import key
 from matt.btctools.messages import CTransaction, CTxOut, sha256
 from matt.environment import Environment
-from matt import ContractManager
-from matt.utils import addr_to_script, format_tx_markdown
+from matt.manager import ContractManager
 from matt.merkle import MerkleTree
+from matt.utils import addr_to_script, format_tx_markdown
 
 from ram_contracts import RAM
 
@@ -54,8 +53,6 @@ class ActionArgumentCompleter(Completer):
                     yield Completion(argument, start_position=-len(word_before_cursor))
 
 
-# point with provably unknown private key
-NUMS_KEY: bytes = bytes.fromhex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")
 
 load_dotenv()
 

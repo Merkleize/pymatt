@@ -2,9 +2,9 @@ import pytest
 
 from examples.rps.rps_contracts import DEFAULT_STAKE, RPS, RPSGameS0
 
-from matt import ContractManager, SchnorrSigner
 from matt.btctools import key
 from matt.btctools.auth_proxy import JSONRPCException
+from matt.manager import ContractManager, SchnorrSigner
 
 
 import random

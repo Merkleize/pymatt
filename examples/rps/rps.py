@@ -51,7 +51,7 @@ import matt.btctools.key as key
 from matt.btctools.messages import sha256
 import matt.btctools.script as script
 from matt.environment import Environment
-from matt import ContractInstance, ContractManager, SchnorrSigner
+from matt.manager import ContractInstance, ContractManager, SchnorrSigner
 
 from rps_contracts import DEFAULT_STAKE, RPS, RPSGameS0
 

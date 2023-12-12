@@ -2,8 +2,8 @@ import pytest
 
 import os
 
-from matt import ContractManager
 from matt.btctools.auth_proxy import AuthServiceProxy
+from matt.manager import ContractManager
 
 
 rpc_url = "http://%s:%s@%s:%s" % (

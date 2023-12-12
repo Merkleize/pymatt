@@ -1,8 +1,8 @@
 from examples.ram.ram_contracts import RAM
 
-from matt import ContractManager
 from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
+from matt.manager import ContractManager
 from matt.merkle import MerkleTree
 
 
