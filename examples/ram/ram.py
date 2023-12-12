@@ -53,7 +53,6 @@ class ActionArgumentCompleter(Completer):
                     yield Completion(argument, start_position=-len(word_before_cursor))
 
 
-
 load_dotenv()
 
 rpc_user = os.getenv("RPC_USER", "rpcuser")
@@ -64,10 +63,10 @@ rpc_port = os.getenv("RPC_PORT", 18443)
 
 def parse_outputs(output_strings: List[str]) -> List[Tuple[str, int]]:
     """Parses a list of strings in the form "address:amount" into a list of (address, amount) tuples.
-    
+
     Args:
     - output_strings (list of str): List of strings in the form "address:amount".
-    
+
     Returns:
     - list of (str, int): List of (address, amount) tuples.
     """
@@ -148,12 +147,12 @@ def execute_command(input_line: str):
         if leaf_index not in range(len(R_inst.data_expanded)):
             raise ValueError("Invalid leaf index")
 
-        outputs=[]
+        outputs = []
         for address, amount in outputs_amounts:
             outputs.append(CTxOut(
-                    nValue=amount,
-                    scriptPubKey=addr_to_script(address)
-                )
+                nValue=amount,
+                scriptPubKey=addr_to_script(address)
+            )
             )
 
         R_inst("withdraw",
@@ -176,10 +175,10 @@ def execute_command(input_line: str):
             raise ValueError("Invalid leaf index")
 
         result = R_inst("write",
-               merkle_root=mt.root,
-               new_value=new_value,
-               merkle_proof=mt.prove_leaf(leaf_index)
-        )
+                        merkle_root=mt.root,
+                        new_value=new_value,
+                        merkle_proof=mt.prove_leaf(leaf_index)
+                        )
 
         assert len(result) == 1
 
@@ -250,7 +249,6 @@ if __name__ == "__main__":
 
     # map from known ctv hashes to the corresponding template (used for withdrawals)
     ctv_templates: Dict[bytes, CTransaction] = {}
-
 
     if args.script:
         script_main(args.script)

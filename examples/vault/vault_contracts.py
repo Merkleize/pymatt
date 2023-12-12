@@ -34,7 +34,8 @@ class Vault(StandardP2TR):
                 ('ctv_hash', BytesType()),
                 ('out_i', IntType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash'])]
+            next_output_fn=lambda args: [ClauseOutput(
+                n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash'])]
         )
 
         # witness: <sig> <ctv-hash> <trigger_out_i> <revault_out_i>
@@ -43,7 +44,7 @@ class Vault(StandardP2TR):
             script=CScript([
                 0, OP_SWAP   # no data tweak
                 # <revault_out_i> from the witness
-                -1,  # current input's taptweak
+                - 1,  # current input's taptweak
                 -1,  # taptree
                 CCV_FLAG_DEDUCT_OUTPUT_AMOUNT,  # revault output
                 OP_CHECKCONTRACTVERIFY,
@@ -64,7 +65,8 @@ class Vault(StandardP2TR):
                 ('revault_out_i', IntType()),
             ],
             next_output_fn=lambda args: [
-                ClauseOutput(n=args['revault_out_i'], next_contract=self,  next_amount=ClauseOutputAmountBehaviour.DEDUCT_OUTPUT),
+                ClauseOutput(n=args['revault_out_i'], next_contract=self,
+                             next_amount=ClauseOutputAmountBehaviour.DEDUCT_OUTPUT),
                 ClauseOutput(n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash']),
             ]
         )

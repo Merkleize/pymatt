@@ -140,8 +140,8 @@ class RPSGameS1(StandardAugmentedP2TR):
                 OP_DUP,           # if the result is negative, add 3
                 0, OP_LESSTHAN,
                 OP_IF,
-                    3,
-                    OP_ADD,
+                3,
+                OP_ADD,
                 OP_ENDIF,
 
                 diff,          # draw / Bob wins / Alice wins, respectively
@@ -166,8 +166,11 @@ class RPSGameS1(StandardAugmentedP2TR):
             ('m_a', IntType()),
             ('r_a', BytesType()),
         ]
-        alice_wins = StandardClause("tie", make_script(0, tmpl_alice_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_alice_wins)
-        bob_wins = StandardClause("bob_wins", make_script(1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_bob_wins)
-        tie = StandardClause("alice_wins", make_script(2, tmpl_tie.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_tie)
+        alice_wins = StandardClause("tie", make_script(
+            0, tmpl_alice_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_alice_wins)
+        bob_wins = StandardClause("bob_wins", make_script(
+            1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_bob_wins)
+        tie = StandardClause("alice_wins", make_script(
+            2, tmpl_tie.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_tie)
 
         super().__init__(NUMS_KEY, [alice_wins, [bob_wins, tie]])

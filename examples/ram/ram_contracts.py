@@ -40,8 +40,8 @@ class RAM(StandardAugmentedP2TR):
                     # TODO: should we check that it's either exactly 0 or exactly 1?
 
                     OP_NOTIF,
-                        # left child; swap, as we want x || h_i
-                        OP_SWAP,
+                    # left child; swap, as we want x || h_i
+                    OP_SWAP,
                     OP_ENDIF,
 
                     OP_CAT,
@@ -140,10 +140,10 @@ class RAM(StandardAugmentedP2TR):
                 OP_SWAP,
                 OP_FROMALTSTACK,
                 OP_EQUALVERIFY,
-                
+
                 # stack: <new_root>
-                
-                # Check that new_root is committed in the next output, 
+
+                # Check that new_root is committed in the next output,
                 0,   # index
                 0,   # NUMS
                 -1,  # keep current taptree
@@ -154,7 +154,8 @@ class RAM(StandardAugmentedP2TR):
             ]),
             arg_specs=[
                 ("merkle_proof", MerkleProofType(n)),
-                ('new_value', BytesType()),  # the new value of the element (its index is specified by the directions in the merkle proof)
+                # the new value of the element (its index is specified by the directions in the merkle proof)
+                ('new_value', BytesType()),
                 ('merkle_root', BytesType()),
             ],
             next_output_fn=lambda args: [

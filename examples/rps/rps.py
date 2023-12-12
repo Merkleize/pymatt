@@ -69,7 +69,8 @@ class AliceGame:
         self.env = env
         self.args = args
 
-        self.priv_key = key.ExtendedKey.deserialize("tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
+        self.priv_key = key.ExtendedKey.deserialize(
+            "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
 
     def start_session(self, m_a: int):
         assert 0 <= m_a <= 2
@@ -127,8 +128,7 @@ class AliceGame:
         print(f"Game result: {outcome}")
 
         self.env.prompt("Broadcasting adjudication transaction")
-        C2(outcome, m_a=m_a, m_b=m_b,r_a=r_a)
-
+        C2(outcome, m_a=m_a, m_b=m_b, r_a=r_a)
 
         s.close()
 
@@ -138,7 +138,8 @@ class BobGame:
         self.env = env
         self.args = args
 
-        self.priv_key = key.ExtendedKey.deserialize("tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
+        self.priv_key = key.ExtendedKey.deserialize(
+            "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
     def join_session(self, m_b: int):
         assert 0 <= m_b <= 2

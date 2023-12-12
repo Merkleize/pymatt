@@ -26,7 +26,7 @@ def test_vault_recover(manager: ContractManager, report_file: TextIOWrapper):
 
     V_inst = manager.fund_instance(V, amount)
 
-    out_instances = V_inst("recover", out_i = 0)
+    out_instances = V_inst("recover", out_i=0)
 
     out: CTxOut = V_inst.spending_tx.vout[0]
 
@@ -36,6 +36,7 @@ def test_vault_recover(manager: ContractManager, report_file: TextIOWrapper):
     report_file.write(format_tx_markdown(V_inst.spending_tx, "Recovery from vault, 1 input [NoRecoveryAuth]"))
 
     assert len(out_instances) == 0
+
 
 def test_vault_trigger_and_recover(manager: ContractManager, report_file: TextIOWrapper):
     locktime = 10
@@ -53,13 +54,12 @@ def test_vault_trigger_and_recover(manager: ContractManager, report_file: TextIO
         ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 4999990000),
     ], nSequence=locktime)
 
-    [U_inst] =  V_inst("trigger", signer = signer,
-                       out_i = 0, ctv_hash = ctv_tmpl.get_standard_template_hash(0))
+    [U_inst] = V_inst("trigger", signer=signer,
+                      out_i=0, ctv_hash=ctv_tmpl.get_standard_template_hash(0))
 
     report_file.write(format_tx_markdown(V_inst.spending_tx, "Trigger [3 vault inputs]"))
 
-
-    out_instances = U_inst("recover", out_i = 0)
+    out_instances = U_inst("recover", out_i=0)
 
     assert len(out_instances) == 0
 
@@ -82,8 +82,8 @@ def test_vault_trigger_and_withdraw(rpc: AuthServiceProxy, manager: ContractMana
         ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 1666663334),
     ], nSequence=locktime)
 
-    [U_inst] =  V_inst("trigger", signer = signer,
-                       out_i = 0, ctv_hash = ctv_tmpl.get_standard_template_hash(0))
+    [U_inst] = V_inst("trigger", signer=signer,
+                      out_i=0, ctv_hash=ctv_tmpl.get_standard_template_hash(0))
 
     report_file.write(format_tx_markdown(V_inst.spending_tx, "Trigger [3 vault inputs]"))
 
@@ -113,7 +113,6 @@ def test_vault_trigger_and_withdraw(rpc: AuthServiceProxy, manager: ContractMana
     manager.spend_and_wait(U_inst, spend_tx)
 
     report_file.write(format_tx_markdown(U_inst.spending_tx, "Withdraw [3 outputs]"))
-
 
 
 def test_vault_trigger_with_revault_and_withdraw(rpc: AuthServiceProxy, manager: ContractManager, report_file: TextIOWrapper):
@@ -156,7 +155,6 @@ def test_vault_trigger_with_revault_and_withdraw(rpc: AuthServiceProxy, manager:
             action,
             {**args, "sig": sigs[i]}
         ))
-
 
     [U_inst] = manager.spend_and_wait([V_inst_1, V_inst_2, V_inst_3], spend_tx)
 

@@ -12,8 +12,10 @@ import random
 random.seed(0)
 
 
-alice_key = key.ExtendedKey.deserialize("tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
-bob_key = key.ExtendedKey.deserialize("tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
+alice_key = key.ExtendedKey.deserialize(
+    "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
+bob_key = key.ExtendedKey.deserialize(
+    "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
 moves = {
     "rock": 0,
@@ -41,12 +43,11 @@ def test_rps(manager: ContractManager):
 
     # cheating attempt
     with pytest.raises(JSONRPCException, match='Script failed an OP_EQUALVERIFY operation'):
-        S1_inst("alice_wins", m_a = m_a, m_b = m_b, r_a = r_a)
+        S1_inst("alice_wins", m_a=m_a, m_b=m_b, r_a=r_a)
 
     # cheat a bit less
     with pytest.raises(JSONRPCException, match='Script failed an OP_EQUALVERIFY operation'):
-        S1_inst("tie", m_a = m_a, m_b = m_b, r_a = r_a)
+        S1_inst("tie", m_a=m_a, m_b=m_b, r_a=r_a)
 
     # correct adjudication
-    S1_inst("bob_wins", m_a = m_a, m_b = m_b, r_a = r_a)
-
+    S1_inst("bob_wins", m_a=m_a, m_b=m_b, r_a=r_a)

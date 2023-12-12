@@ -71,6 +71,7 @@ class SignerType(BytesType):
     It is encoded as bytes, but labeling it allows the ContractManager to get the correct
     signatures by calling SchnorrSigner object instances.
     """
+
     def __init__(self, pubkey: bytes):
         if len(pubkey) != 32:
             raise ValueError("pubkey must be an x-only pubkey")

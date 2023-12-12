@@ -61,8 +61,6 @@ class StandardClause(Clause):
 
         self.next_outputs_fn = next_output_fn
 
-
-
     def next_outputs(self, args: dict) -> Union[List[ClauseOutput], CTransaction]:
         if self.next_outputs_fn is not None:
             return self.next_outputs_fn(args)
@@ -121,6 +119,7 @@ class OpaqueP2TR(AbstractContract):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(pubkey={self.pubkey.hex()})"
+
 
 Tapleaf = Tuple[str, Union[CScript, bytes]]
 TaptreeDescription = List['TaptreeDescription']

@@ -39,7 +39,7 @@ class ActionArgumentCompleter(Completer):
         "printall": [],
         "recover": ["item="],
         "trigger": ["items=\"[", "outputs=\"["],
-        "withdraw": ["item="], # TODO: allow multiple items?
+        "withdraw": ["item="],  # TODO: allow multiple items?
     }
 
     def get_completions(self, document, complete_event):
@@ -81,10 +81,10 @@ def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
 
 def parse_outputs(output_strings: List[str]) -> List[Tuple[str, int]]:
     """Parses a list of strings in the form "address:amount" into a list of (address, amount) tuples.
-    
+
     Args:
     - output_strings (list of str): List of strings in the form "address:amount".
-    
+
     Returns:
     - list of (str, int): List of (address, amount) tuples.
     """
@@ -177,7 +177,7 @@ def execute_command(input_line: str):
         ctv_tmpl = CTransaction()
         ctv_tmpl.nVersion = 2
         ctv_tmpl.vin = [CTxIn(nSequence=10)]
-        
+
         outputs = parse_outputs(json.loads(args_dict["outputs"]))
         outputs_total_amount = sum(out[1] for out in outputs)
 
@@ -191,9 +191,9 @@ def execute_command(input_line: str):
         ctv_tmpl.vout = []
         for address, amount in outputs:
             ctv_tmpl.vout.append(CTxOut(
-                    nValue=amount,
-                    scriptPubKey=segwit_addr_to_scriptpubkey(address)
-                )
+                nValue=amount,
+                scriptPubKey=segwit_addr_to_scriptpubkey(address)
+            )
             )
 
         # we assume the output is spent as first input later in the withdrawal transaction
@@ -209,7 +209,8 @@ def execute_command(input_line: str):
                 # at this time, we don't support partially revaulting from multiple UTXOs
                 # (which might perhaps be useful for UTXO management in a real vault)
                 if revault_amount > v.get_value():
-                    raise ValueError(f"Input's amount {v.get_value()} is not enough for the revault amount {revault_amount}")
+                    raise ValueError(
+                        f"Input's amount {v.get_value()} is not enough for the revault amount {revault_amount}")
                 spends.append(
                     (v, "trigger_and_revault", {"out_i": 0, "revault_out_i": 1, "ctv_hash": ctv_hash})
                 )
@@ -230,7 +231,6 @@ def execute_command(input_line: str):
                 action,
                 {**args, "sig": sigs[i]}
             ))
-
 
         print("Waiting for trigger transaction to be confirmed...")
         result = manager.spend_and_wait(spending_vaults, spend_tx)
@@ -342,7 +342,6 @@ if __name__ == "__main__":
 
     # map from known ctv hashes to the corresponding template (used for withdrawals)
     ctv_templates: Dict[bytes, CTransaction] = {}
-
 
     if args.script:
         script_main(args.script)

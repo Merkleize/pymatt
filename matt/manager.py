@@ -39,7 +39,7 @@ class SchnorrSigner:
         for k in self.keys:
             if k.pubkey[1:] == pubkey:
                 return sign_schnorr(k.privkey, msg)
-        
+
         return None
 
 
@@ -54,7 +54,7 @@ class ContractInstance:
         self.contract = contract
         self.data = None if not self.is_augm() else b'\0'*32
 
-        self.data_expanded = None # TODO: figure out a good API for this
+        self.data_expanded = None  # TODO: figure out a good API for this
 
         self.manager: ContractManager = None
 
@@ -151,7 +151,8 @@ class ContractManager:
         if self.mine_automatically:
             self._mine_blocks(1)
 
-        instance.outpoint, instance.last_height = wait_for_output(self.rpc, scriptPubKey, txid=txid, poll_interval=self.poll_interval)
+        instance.outpoint, instance.last_height = wait_for_output(
+            self.rpc, scriptPubKey, txid=txid, poll_interval=self.poll_interval)
 
         funding_tx_raw = self.rpc.getrawtransaction(instance.outpoint.hash.to_bytes(32, byteorder="big").hex())
         funding_tx = CTransaction()
@@ -161,10 +162,10 @@ class ContractManager:
         instance.status = ContractInstanceStatus.FUNDED
 
     def get_spend_tx(
-            self,
-            spends: Union[Tuple[ContractInstance, str, dict], List[Tuple[ContractInstance, str, dict]]],
-            output_amounts: Dict[int, int] = {}
-        ) -> Tuple[CTransaction, List[bytes]]:
+        self,
+        spends: Union[Tuple[ContractInstance, str, dict], List[Tuple[ContractInstance, str, dict]]],
+        output_amounts: Dict[int, int] = {}
+    ) -> Tuple[CTransaction, List[bytes]]:
         if not isinstance(spends, list):
             spends = [spends]
 
@@ -217,9 +218,11 @@ class ContractManager:
                         preserve_output_used = True
                     elif clause_output.next_amount == ClauseOutputAmountBehaviour.DEDUCT_OUTPUT:
                         if preserve_output_used:
-                            raise ValueError("DEDUCT_OUTPUT clause outputs must be declared before PRESERVE_OUTPUT clause outputs")
+                            raise ValueError(
+                                "DEDUCT_OUTPUT clause outputs must be declared before PRESERVE_OUTPUT clause outputs")
                         if clause_output.n not in output_amounts:
-                            raise ValueError("The output amount must be specified for clause outputs using DEDUCT_AMOUNT")
+                            raise ValueError(
+                                "The output amount must be specified for clause outputs using DEDUCT_AMOUNT")
 
                         outputs_map[clause_output.n].nValue = output_amounts[clause_output.n]
                         ccv_amount -= output_amounts[clause_output.n]
@@ -301,7 +304,7 @@ class ContractManager:
                 self.rpc,
                 instance.outpoint,
                 starting_height=instance.last_height,
-                poll_interval = self.poll_interval
+                poll_interval=self.poll_interval
             )
             tx.rehash()
 

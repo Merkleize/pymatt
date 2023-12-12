@@ -157,7 +157,7 @@ class MerkleProof:
     def from_wit_stack(wit_stack: List[bytes]):
         """
         Constructs a MerkleProof instance from a given witness stack.
-        
+
         Args:
             wit_stack (list): A list of hashes and directions followed by an element x, structured as
                             [<h_1>, <d_1>, <h_2>, <d_2>, ..., <h_n>, <d_n>, <x>]
