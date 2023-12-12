@@ -72,7 +72,7 @@ class RPSGameS0(StandardP2TR):
                 OP_SHA256,  # data = sha256(m_b)
                 0,  # index
                 0,  # NUMS pk
-                S1.get_taptree(),
+                S1.get_taptree_merkle_root(),
                 0,  # flags
                 OP_CHECKCONTRACTVERIFY,
             ]),
@@ -83,7 +83,7 @@ class RPSGameS0(StandardP2TR):
             next_output_fn=lambda args: [ClauseOutput(n=0, next_contract=S1, next_data=sha256(bn2vch(args['m_b'])))]
         )
 
-        super().__init__(NUMS_KEY, [bob_move])
+        super().__init__(NUMS_KEY, bob_move)
 
 
 # params:
@@ -169,4 +169,4 @@ class RPSGameS1(StandardAugmentedP2TR):
         bob_wins = StandardClause("bob_wins", make_script(1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_bob_wins)
         tie = StandardClause("alice_wins", make_script(2, tmpl_tie.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_tie)
 
-        super().__init__(NUMS_KEY, [alice_wins, bob_wins, tie])
+        super().__init__(NUMS_KEY, [alice_wins, [bob_wins, tie]])

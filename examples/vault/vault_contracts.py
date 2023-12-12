@@ -20,7 +20,7 @@ class Vault(StandardP2TR):
             script=CScript([
                 # data and index already on the stack
                 0 if alternate_pk is None else alternate_pk,  # pk
-                unvaulting.get_taptree(),  # taptree
+                unvaulting.get_taptree_merkle_root(),  # taptree
                 0,  # standard flags
                 OP_CHECKCONTRACTVERIFY,
 
@@ -48,7 +48,7 @@ class Vault(StandardP2TR):
 
                 # data and index already on the stack
                 0 if alternate_pk is None else alternate_pk,  # pk
-                unvaulting.get_taptree(),  # taptree
+                unvaulting.get_taptree_merkle_root(),  # taptree
                 0,  # standard flags
                 OP_CHECKCONTRACTVERIFY,
 
@@ -85,7 +85,7 @@ class Vault(StandardP2TR):
             next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
-        super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [trigger, trigger_and_recover, recover])
+        super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [trigger, [trigger_and_recover, recover]])
 
 
 class Unvaulting(StandardAugmentedP2TR):

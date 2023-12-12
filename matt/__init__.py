@@ -132,13 +132,16 @@ class OpaqueP2TR(AbstractContract):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(pubkey={self.pubkey.hex()})"
 
+Tapleaf = Tuple[str, Union[CScript, bytes]]
+TaptreeDescription = List['TaptreeDescription']
+
 
 class P2TR(AbstractContract):
     """
     A class representing a Pay-to-Taproot script.
     """
 
-    def __init__(self, internal_pubkey: bytes, scripts: List[Tuple[str, CScript]]):
+    def __init__(self, internal_pubkey: bytes, scripts: TaptreeDescription):
         assert len(internal_pubkey) == 32
 
         self.internal_pubkey = internal_pubkey
@@ -167,10 +170,10 @@ class AugmentedP2TR(AbstractContract):
 
         self.naked_internal_pubkey = naked_internal_pubkey
 
-    def get_scripts(self) -> List[Tuple[str, CScript]]:
+    def get_scripts(self) -> TaptreeDescription:
         raise NotImplementedError("This must be implemented in subclasses")
 
-    def get_taptree(self) -> bytes:
+    def get_taptree_merkle_root(self) -> bytes:
         # use dummy data, since it doesn't affect the merkle root
         return self.get_tr_info(b'\0'*32).merkle_root
 
@@ -185,15 +188,41 @@ class AugmentedP2TR(AbstractContract):
         return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()}. Contracts's data: {self.data})"
 
 
+StandardTaptreeDescription = Union[StandardClause, List['StandardTaptreeDescription']]
+
+
+# converts a StandardTaptreeDescription to a TaptreeDescription, preserving the structure
+def _normalize_standard_taptree_description(std_tree: StandardTaptreeDescription) -> TaptreeDescription:
+    if isinstance(std_tree, list):
+        if len(std_tree) != 2:
+            raise ValueError("A TapBranch must have exactly two children")
+        return [_normalize_standard_taptree_description(el) for el in std_tree]
+    else:
+        # std_tree is actually a single StandardClause
+        return [(std_tree.name, std_tree.script)]
+
+
+# returns a flattenet list of StandardClause
+def _flatten_standard_taptree_description(std_tree: StandardTaptreeDescription) -> List[StandardClause]:
+    if isinstance(std_tree, list):
+        if len(std_tree) != 2:
+            raise ValueError("A TapBranch must have exactly two children")
+        return [item for subtree in std_tree for item in _flatten_standard_taptree_description(subtree)]
+    else:
+        # std_tree is a single clause
+        return [std_tree]
+
+
 class StandardP2TR(P2TR):
     """
     A StandardP2TR where all the transitions are given by a StandardClause.
     """
 
-    def __init__(self, internal_pubkey: bytes, clauses: List[StandardClause]):
-        super().__init__(internal_pubkey, list(map(lambda x: (x.name, x.script), clauses)))
-        self.clauses = clauses
-        self._clauses_dict = {clause.name: clause for clause in clauses}
+    def __init__(self, internal_pubkey: bytes, standard_taptree: StandardTaptreeDescription):
+        super().__init__(internal_pubkey, _normalize_standard_taptree_description(standard_taptree))
+        self.standard_taptree = standard_taptree
+        self.clauses = _flatten_standard_taptree_description(standard_taptree)
+        self._clauses_dict = {clause.name: clause for clause in self.clauses}
 
     def get_scripts(self) -> List[Tuple[str, CScript]]:
         return list(map(lambda clause: (clause.name, clause.script), self.clauses))
@@ -220,13 +249,14 @@ class StandardAugmentedP2TR(AugmentedP2TR):
     An AugmentedP2TR where all the transitions are given by a StandardClause.
     """
 
-    def __init__(self, naked_internal_pubkey: bytes, clauses: List[StandardClause]):
+    def __init__(self, naked_internal_pubkey: bytes, standard_taptree: StandardTaptreeDescription):
         super().__init__(naked_internal_pubkey)
-        self.clauses = clauses
-        self._clauses_dict = {clause.name: clause for clause in clauses}
+        self.standard_taptree = standard_taptree
+        self.clauses = _flatten_standard_taptree_description(standard_taptree)
+        self._clauses_dict = {clause.name: clause for clause in self.clauses}
 
-    def get_scripts(self) -> List[Tuple[str, CScript]]:
-        return list(map(lambda clause: (clause.name, clause.script), self.clauses))
+    def get_scripts(self) -> TaptreeDescription:
+        return _normalize_standard_taptree_description(self.standard_taptree)
 
     def decode_wit_stack(self, data: bytes, stack_elems: List[bytes]) -> Tuple[str, dict]:
         leaf_hash = stack_elems[-2]
