@@ -7,7 +7,7 @@ from matt.contracts import ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR
 
 
 class Vault(StandardP2TR):
-    def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes, unvault_pk: bytes):
+    def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes, unvault_pk: bytes, *, has_partial_revault=True, has_early_recover=True):
         assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32 and len(unvault_pk)
 
         self.alternate_pk = alternate_pk
@@ -15,6 +15,9 @@ class Vault(StandardP2TR):
         self.recover_pk = recover_pk
 
         unvaulting = Unvaulting(alternate_pk, spend_delay, recover_pk)
+
+        self.has_partial_revault = has_partial_revault
+        self.has_early_recover = has_early_recover
 
         # witness: <sig> <ctv-hash> <out_i>
         trigger = StandardClause(
@@ -89,7 +92,18 @@ class Vault(StandardP2TR):
             next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
-        super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [trigger, [trigger_and_recover, recover]])
+        if self.has_partial_revault:
+            if self.has_early_recover:
+                clauses = [trigger, [trigger_and_recover, recover]]
+            else:
+                clauses = [trigger, trigger_and_recover]
+        else:
+            if self.has_early_recover:
+                clauses = [trigger, recover]
+            else:
+                clauses = trigger
+
+        super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, clauses)
 
 
 class Unvaulting(StandardAugmentedP2TR):
