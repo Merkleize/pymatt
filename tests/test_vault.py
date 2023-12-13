@@ -29,17 +29,17 @@ V_full: VaultSpecs = (
     Vault(None, locktime, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
 )
 V_no_partial_revault: VaultSpecs = (
-    "Vault[no partial revault]",
+    "Vault [no partial revault]",
     Vault(None, locktime, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:], has_partial_revault=False)
 )
 
 V_no_early_recover: VaultSpecs = (
-    "Vault[no early recover]",
+    "Vault [no early recover]",
     Vault(None, locktime, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:], has_early_recover=False)
 )
 
 V_light: VaultSpecs = (
-    "Vault[light]",
+    "Vault [lightweight - no partial revault, no early recover]",
     Vault(None, locktime, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:],
           has_partial_revault=False, has_early_recover=False)
 )
@@ -60,8 +60,7 @@ def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report
     assert out.nValue == amount
     assert out.scriptPubKey == OpaqueP2TR(recover_priv_key.pubkey[1:]).get_tr_info().scriptPubKey
 
-    report.write(vault_description,
-                 format_tx_markdown(V_inst.spending_tx, "Recovery from vault, 1 input [NoRecoveryAuth]"))
+    report.write(vault_description, format_tx_markdown(V_inst.spending_tx, "Recovery from vault, 1 input"))
 
     assert len(out_instances) == 0
 
