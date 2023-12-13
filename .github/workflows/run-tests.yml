@@ -45,3 +45,8 @@ jobs:
         with:
           name: test-output
           path: test_output.txt
+      - name: Upload markdown report as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: report.md
+          path: report.md
