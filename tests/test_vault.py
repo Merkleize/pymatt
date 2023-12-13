@@ -1,4 +1,3 @@
-from io import TextIOWrapper
 from typing import Tuple
 import pytest
 
@@ -47,7 +46,7 @@ V_light: VaultSpecs = (
 
 
 @pytest.mark.parametrize("vault_specs", [V_full, V_no_partial_revault])
-def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report_file: TextIOWrapper):
+def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report):
     vault_description, vault_contract = vault_specs
 
     amount = 20_000
@@ -61,14 +60,14 @@ def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report
     assert out.nValue == amount
     assert out.scriptPubKey == OpaqueP2TR(recover_priv_key.pubkey[1:]).get_tr_info().scriptPubKey
 
-    report_file.write(format_tx_markdown(V_inst.spending_tx,
-                      f"{vault_description}: Recovery from vault, 1 input [NoRecoveryAuth]"))
+    report.write(vault_description,
+                 format_tx_markdown(V_inst.spending_tx, "Recovery from vault, 1 input [NoRecoveryAuth]"))
 
     assert len(out_instances) == 0
 
 
 @pytest.mark.parametrize("vault_specs", [V_full, V_no_partial_revault, V_no_early_recover, V_light])
-def test_vault_trigger_and_recover(vault_specs: VaultSpecs, manager: ContractManager, report_file: TextIOWrapper):
+def test_vault_trigger_and_recover(vault_specs: VaultSpecs, manager: ContractManager, report):
     vault_description, vault_contract = vault_specs
 
     signer = SchnorrSigner(unvault_priv_key)
@@ -86,17 +85,17 @@ def test_vault_trigger_and_recover(vault_specs: VaultSpecs, manager: ContractMan
     [U_inst] = V_inst("trigger", signer=signer,
                       out_i=0, ctv_hash=ctv_tmpl.get_standard_template_hash(0))
 
-    report_file.write(format_tx_markdown(V_inst.spending_tx, f"{vault_description}: Trigger"))
+    report.write(vault_description, format_tx_markdown(V_inst.spending_tx, "Trigger"))
 
     out_instances = U_inst("recover", out_i=0)
 
     assert len(out_instances) == 0
 
-    report_file.write(format_tx_markdown(U_inst.spending_tx, f"{vault_description}: Recovery from trigger"))
+    report.write(vault_description, format_tx_markdown(U_inst.spending_tx, "Recovery from trigger"))
 
 
 @pytest.mark.parametrize("vault_specs", [V_full, V_no_partial_revault, V_no_early_recover, V_light])
-def test_vault_trigger_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServiceProxy, manager: ContractManager, report_file: TextIOWrapper):
+def test_vault_trigger_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServiceProxy, manager: ContractManager, report):
     vault_description, vault_contract = vault_specs
 
     signer = SchnorrSigner(unvault_priv_key)
@@ -113,8 +112,6 @@ def test_vault_trigger_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServicePro
 
     [U_inst] = V_inst("trigger", signer=signer,
                       out_i=0, ctv_hash=ctv_tmpl.get_standard_template_hash(0))
-
-    report_file.write(format_tx_markdown(V_inst.spending_tx, f"{vault_description}: Trigger"))
 
     spend_tx, _ = manager.get_spend_tx(
         (U_inst, "withdraw", {"ctv_hash": ctv_tmpl.get_standard_template_hash(0)})
@@ -141,11 +138,11 @@ def test_vault_trigger_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServicePro
 
     manager.spend_and_wait(U_inst, spend_tx)
 
-    report_file.write(format_tx_markdown(U_inst.spending_tx, f"{vault_description}: Withdraw [3 outputs]"))
+    report.write(vault_description, format_tx_markdown(U_inst.spending_tx, "Withdraw [3 outputs]"))
 
 
 @pytest.mark.parametrize("vault_specs", [V_full, V_no_early_recover])
-def test_vault_trigger_with_revault_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServiceProxy, manager: ContractManager, report_file: TextIOWrapper):
+def test_vault_trigger_with_revault_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServiceProxy, manager: ContractManager, report):
     # get coins on 3 different Vaults, then trigger with partial withdrawal
     # one of the vault uses "trigger_with_revault", the others us normal "trigger"
 
@@ -187,7 +184,7 @@ def test_vault_trigger_with_revault_and_withdraw(vault_specs: VaultSpecs, rpc: A
 
     [U_inst] = manager.spend_and_wait([V_inst_1, V_inst_2, V_inst_3], spend_tx)
 
-    report_file.write(format_tx_markdown(spend_tx, f"{vault_description}: Trigger (with revault) [3 vault inputs]"))
+    report.write(vault_description, format_tx_markdown(spend_tx, "Trigger (with revault) [3 vault inputs]"))
 
     spend_tx, _ = manager.get_spend_tx(
         (U_inst, "withdraw", {"ctv_hash": ctv_tmpl.get_standard_template_hash(0)})
@@ -210,5 +207,3 @@ def test_vault_trigger_with_revault_and_withdraw(vault_specs: VaultSpecs, rpc: A
     mine_blocks(rpc, locktime - 1)
 
     manager.spend_and_wait(U_inst, spend_tx)
-
-    report_file.write(format_tx_markdown(U_inst.spending_tx, f"{vault_description}: Withdraw (3 outputs)"))

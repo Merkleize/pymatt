@@ -29,7 +29,26 @@ def manager(rpc):
     return ContractManager([], rpc, mine_automatically=True, poll_interval=0.01)
 
 
+class TestReport:
+    def __init__(self):
+        self.sections = {}
+
+    def write(self, section_name, content):
+        if section_name not in self.sections:
+            self.sections[section_name] = []
+        self.sections[section_name].append(content)
+
+    def finalize_report(self, filename):
+        with open(filename, "w") as file:
+            for section, contents in self.sections.items():
+                file.write(f"## {section}\n")
+                for content in contents:
+                    file.write(content + "\n")
+                file.write("\n")
+
+
 @pytest.fixture(scope="session")
-def report_file():
-    with open("report.md", "w") as file:
-        yield file
+def report():
+    report_obj = TestReport()
+    yield report_obj
+    report_obj.finalize_report("report.md")
