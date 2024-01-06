@@ -217,26 +217,28 @@ class ContractManager:
                     else:
                         raise ValueError("Unsupported contract type")
 
-                    if clause_output.n in outputs_map:
-                        if outputs_map[clause_output.n].scriptPubKey != out_scriptPubKey:
+                    out_index = input_index if clause_output.n == -1 else clause_output.n
+
+                    if out_index in outputs_map:
+                        if outputs_map[out_index].scriptPubKey != out_scriptPubKey:
                             raise ValueError(
-                                f"Clashing output script for output {clause_output.n}: specifications for input {input_index} don't match a previous one")
+                                f"Clashing output script for output {out_index}: specifications for input {input_index} don't match a previous one")
                     else:
-                        outputs_map[clause_output.n] = CTxOut(0, out_scriptPubKey)
+                        outputs_map[out_index] = CTxOut(0, out_scriptPubKey)
 
                     if clause_output.next_amount == ClauseOutputAmountBehaviour.PRESERVE_OUTPUT:
-                        outputs_map[clause_output.n].nValue += ccv_amount
+                        outputs_map[out_index].nValue += ccv_amount
                         preserve_output_used = True
                     elif clause_output.next_amount == ClauseOutputAmountBehaviour.DEDUCT_OUTPUT:
                         if preserve_output_used:
                             raise ValueError(
                                 "DEDUCT_OUTPUT clause outputs must be declared before PRESERVE_OUTPUT clause outputs")
-                        if clause_output.n not in output_amounts:
+                        if out_index not in output_amounts:
                             raise ValueError(
                                 "The output amount must be specified for clause outputs using DEDUCT_AMOUNT")
 
-                        outputs_map[clause_output.n].nValue = output_amounts[clause_output.n]
-                        ccv_amount -= output_amounts[clause_output.n]
+                        outputs_map[out_index].nValue = output_amounts[out_index]
+                        ccv_amount -= output_amounts[out_index]
                     else:
                         raise ValueError("Only PRESERVE_OUTPUT and DEDUCT_OUTPUT clause outputs are supported")
 
@@ -344,7 +346,9 @@ class ContractManager:
                 pass
             else:
                 for clause_output in next_outputs:
-                    if clause_output.n in out_contracts:
+                    output_index = vin if clause_output.n == -1 else clause_output.n
+
+                    if output_index in out_contracts:
                         continue  # output already specified by another input
 
                     out_contract = clause_output.next_contract
@@ -361,11 +365,11 @@ class ContractManager:
 
                     new_instance.last_height = instance.last_height
 
-                    new_instance.outpoint = COutPoint(int(tx.hash, 16), clause_output.n)
+                    new_instance.outpoint = COutPoint(int(tx.hash, 16), output_index)
                     new_instance.funding_tx = tx
                     new_instance.status = ContractInstanceStatus.FUNDED
 
-                    out_contracts[clause_output.n] = new_instance
+                    out_contracts[output_index] = new_instance
 
         result = list(out_contracts.values())
         for instance in result:

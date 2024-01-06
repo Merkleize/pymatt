@@ -133,7 +133,7 @@ class G256_S0(StandardP2TR):
                 ('x', IntType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(
-                n=0,
+                n=-1,
                 next_contract=G256_S1(alice_pk, bob_pk, forfait_timeout),
                 next_data=sha256(encode_wit_element(args['x']))
             )]
@@ -180,7 +180,7 @@ class G256_S1(StandardAugmentedP2TR):
                 ('sha256_x', BytesType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(
-                n=0,
+                n=-1,
                 next_contract=g256_s2,
                 next_data=MerkleTree([args['t_a'], sha256(encode_wit_element(args['y'])), args['sha256_x']]).root
             )]
@@ -252,7 +252,7 @@ class G256_S2(StandardAugmentedP2TR):
                 ('t_b', BytesType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(
-                n=0,
+                n=-1,
                 next_contract=bisectg256_0,
                 next_data=MerkleTree([
                     args['sha256_x'],
@@ -338,7 +338,7 @@ class BisectG256_0(StandardAugmentedP2TR):
                 ('t_right_a', BytesType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(
-                n=0,
+                n=-1,
                 next_contract=bisectg256_1,
                 next_data=MerkleTree([
                     args['h_i'],
@@ -460,7 +460,7 @@ class BisectG256_1(StandardAugmentedP2TR):
                 ('t_right_b', BytesType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(
-                n=0,
+                n=-1,
                 next_contract=leaf if are_children_leaves else bisectg256_0_left,
                 next_data=MerkleTree([
                     args['h_i'],
@@ -556,7 +556,7 @@ class BisectG256_1(StandardAugmentedP2TR):
                 ('t_right_b', BytesType()),
             ],
             next_output_fn=lambda args: [ClauseOutput(
-                n=0,
+                n=-1,
                 next_contract=leaf if are_children_leaves else bisectg256_0_right,
                 next_data=MerkleTree([
                     args['h_i_plus_m_a'],
