@@ -6,6 +6,7 @@ from matt.btctools.messages import sha256
 from matt.btctools import script
 from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
 from matt.contracts import P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from matt.script_helpers import check_output_contract
 from matt.utils import make_ctv_template
 
 DEFAULT_STAKE: int = 1000  # amount of sats that the players bet
@@ -71,11 +72,7 @@ class RPSGameS0(StandardP2TR):
                 OP_DUP, 0, 3, OP_WITHIN, OP_VERIFY,   # check that m_b is 0, 1 or 2
 
                 OP_SHA256,  # data = sha256(m_b)
-                0,  # index
-                0,  # NUMS pk
-                S1.get_taptree_merkle_root(),
-                0,  # flags
-                OP_CHECKCONTRACTVERIFY,
+                *check_output_contract(S1, index=0),
             ]),
             arg_specs=[
                 ('m_b', IntType()),
