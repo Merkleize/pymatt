@@ -1,11 +1,11 @@
-from examples.fraud.fraud_contracts import G256_S0, G256_S1, G256_S2, BisectG256_0, BisectG256_1, Leaf2x
+from examples.fraud.fraud_contracts import G256_S0, G256_S1, G256_S2, BisectG256_0, BisectG256_1, Compute2x, Leaf
 
 from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
 from matt.manager import ContractManager, SchnorrSigner
 from matt.merkle import MerkleTree, is_power_of_2
 from matt.btctools import key
-from matt.utils import encode_wit_element, format_tx_markdown
+from matt.utils import encode_wit_element
 
 
 AMOUNT = 20_000
@@ -18,7 +18,7 @@ bob_key = key.ExtendedKey.deserialize(
 
 
 def test_leaf_reveal_alice(manager: ContractManager):
-    L = Leaf2x(alice_key.pubkey[1:], bob_key.pubkey[1:])
+    L = Leaf(alice_key.pubkey[1:], bob_key.pubkey[1:], Compute2x)
 
     x_start = 347
     x_end_alice = 2 * x_start
@@ -44,14 +44,14 @@ def test_leaf_reveal_alice(manager: ContractManager):
     out_instances = L_inst("alice_reveal",
                            signer=SchnorrSigner(alice_key),
                            outputs=outputs,
-                           x_start=x_start,
-                           h_end_b=h_end_bob)
+                           x=x_start,
+                           h_y_b=h_end_bob)
 
     assert len(out_instances) == 0
 
 
 def test_leaf_reveal_bob(manager: ContractManager):
-    L = Leaf2x(alice_key.pubkey[1:], bob_key.pubkey[1:])
+    L = Leaf(alice_key.pubkey[1:], bob_key.pubkey[1:], Compute2x)
 
     x_start = 347
     x_end_alice = 2 * x_start - 1  # some wrong value
@@ -77,8 +77,8 @@ def test_leaf_reveal_bob(manager: ContractManager):
     out_instances = L_inst("bob_reveal",
                            signer=SchnorrSigner(bob_key),
                            outputs=outputs,
-                           x_start=x_start,
-                           h_end_a=h_end_alice)
+                           x=x_start,
+                           h_y_a=h_end_alice)
 
     assert len(out_instances) == 0
 
@@ -264,9 +264,9 @@ def test_fraud_proof_full(manager: ContractManager):
 
     # We reached a leaf. Only who was doubling correctly can withdraw
 
-    assert isinstance(inst.contract, Leaf2x)
+    assert isinstance(inst.contract, Leaf)
 
-    assert alice_trace[5] == bob_trace[5]
+    assert alice_trace[5] == bob_trace[5] and alice_trace[6] != bob_trace[6]
 
     outputs = [
         CTxOut(
@@ -277,7 +277,7 @@ def test_fraud_proof_full(manager: ContractManager):
     out_instances = inst("bob_reveal",
                          signer=SchnorrSigner(bob_key),
                          outputs=outputs,
-                         x_start=bob_trace[5],
-                         h_end_a=h_a[6])
+                         x=bob_trace[5],
+                         h_y_a=h_a[6])
 
     assert len(out_instances) == 0

@@ -1,7 +1,9 @@
 
 
+from dataclasses import dataclass
+from typing import Callable, List, Tuple
 from matt import NUMS_KEY
-from matt.argtypes import BytesType, IntType, SignerType
+from matt.argtypes import ArgType, BytesType, IntType, SignerType
 from matt.btctools.common import sha256
 from matt.btctools.script import OP_2DROP, OP_ADD, OP_CAT, OP_CHECKSIG, OP_DROP, OP_DUP, OP_EQUAL, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_NOT, OP_PICK, OP_ROT, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, CScript
 from matt.contracts import ClauseOutput, StandardClause, StandardAugmentedP2TR, StandardP2TR
@@ -112,6 +114,14 @@ Contracts:
 
 # TODO: add forfait clauses whenever needed
 
+# TODO: how to generalize what the contract does after the leaf? We should be able to compose clauses with some external code.
+#       Do we need "clause" algebra?
+
+# TODO: Augmented contracts should also specify the "encoder" for its data, so that callers don't have to worry
+#       about handling Merkle trees by hand.
+#       Might also be needed to define "higher order contracts" that can be used as a gadget, then provide a result
+#       to some other contract provided by the caller.
+
 class G256_S0(StandardP2TR):
     def __init__(self, alice_pk: bytes, bob_pk: bytes, forfait_timeout: int = 10):
         self.alice_pk = alice_pk
@@ -207,7 +217,9 @@ class G256_S2(StandardAugmentedP2TR):
             arg_specs=[('alice_sig', SignerType(alice_pk))]
         )
 
-        bisectg256_0 = BisectG256_0(alice_pk, bob_pk, 0, 7, forfait_timeout)
+        def leaf_factory(i: int): return Leaf(alice_pk, bob_pk, Compute2x)
+
+        bisectg256_0 = BisectG256_0(alice_pk, bob_pk, 0, 7, leaf_factory, forfait_timeout)
         # start_challenge: <bob_sig> <t_a> <sha256(y)> <sha256(x)> <z> <t_b>
         start_challenge = StandardClause(
             name="start_challenge",
@@ -269,12 +281,134 @@ class G256_S2(StandardAugmentedP2TR):
 
 # Fraud proof protocol from here
 
+
+@dataclass
+class Computer:
+    encoder: CScript
+    func: CScript
+    specs: List[Tuple[str, ArgType]]
+
+
+class Leaf(StandardAugmentedP2TR):
+    def __init__(self, alice_pk: bytes, bob_pk: bytes, computer: Computer):
+        self.alice_pk = alice_pk
+        self.bob_pk = bob_pk
+        self.computer = computer
+
+        # Alice shows that she can indeed correctly perform the step
+        # <alice_sig> <x...> <h_y_b>
+        alice_reveal = StandardClause(
+            name="alice_reveal",
+            script=CScript([
+                OP_TOALTSTACK,
+                *dup(len(computer.specs)),
+
+                # <alice_sig> <x...> <x...>  --  <h_y_b>
+
+                # compute h_x
+                *computer.encoder,
+
+                OP_TOALTSTACK,
+
+                # <alice_sig> <x...>  --  <h_y_b> <h_x>
+
+                # compute y
+                *computer.func,
+
+                # <alice_sig> <y...>  --  <h_y_b> <h_x>
+
+                # compute h_y
+                *computer.encoder,
+
+                # <alice_sig> <h_y>  --  <h_y_b> <h_x>
+
+                OP_FROMALTSTACK, OP_SWAP,
+                OP_FROMALTSTACK,
+
+                # <alice_sig> <h_x> <h_y> <h_y_b>
+                *merkle_root(3),
+                *check_input_contract(),
+
+                # check Alice's signature
+                alice_pk,
+                OP_CHECKSIG
+            ]),
+            arg_specs=[
+                ('alice_sig', SignerType(alice_pk)),
+                *computer.specs,
+                ('h_y_b', BytesType()),
+            ]
+        )
+
+        # Bob shows that he can indeed correctly perform the step
+        # <bob_sig> <x...> <h_y_a>
+        bob_reveal = StandardClause(
+            name="bob_reveal",
+            script=CScript([
+                OP_TOALTSTACK,
+                *dup(len(computer.specs)),
+
+                # <bob_sig> <x...> <x...>  --  <h_y_a>
+
+                # compute h_start
+                *computer.encoder,
+
+                OP_TOALTSTACK,
+
+                # <bob_sig> <x...>  --  <h_y_a> <h_start>
+
+                # compute y
+                *computer.func,
+
+                # <bob_sig> <y...>  --  <h_y_a> <h_start>
+
+                # compute h_y
+                *computer.encoder,
+
+                # <bob_sig> <h_y>  --  <h_y_a> <h_start>
+
+                OP_FROMALTSTACK, OP_SWAP,
+                OP_FROMALTSTACK, OP_SWAP,
+
+                # <bob_sig> <h_start> <h_y_a> <h_y>
+                *merkle_root(3),
+                *check_input_contract(),
+
+                # check Bob's signature
+                bob_pk,
+                OP_CHECKSIG
+            ]),
+            arg_specs=[
+                ('bob_sig', SignerType(bob_pk)),
+                *computer.specs,
+                ('h_y_a', BytesType()),
+            ]
+        )
+
+        super().__init__(NUMS_KEY, [alice_reveal, bob_reveal])
+
+
+Compute2x = Computer(
+    encoder=CScript([OP_SHA256]),
+    func=CScript([OP_DUP, OP_ADD]),
+    specs=[('x', IntType())],
+)
+
+
+NopInt = Computer(
+    encoder=CScript([]),
+    func=CScript([]),
+    specs=[('x', IntType())],
+)
+
+
 class BisectG256_0(StandardAugmentedP2TR):
-    def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, forfait_timeout: int = 10):
+    def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, leaf_factory: Callable[[int], Leaf], forfait_timeout: int = 10):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
         self.i = i
         self.j = j
+        self.leaf_factory = leaf_factory
         self.forfait_timeout = forfait_timeout
 
         assert j > i
@@ -283,7 +417,7 @@ class BisectG256_0(StandardAugmentedP2TR):
 
         assert n >= 2 and is_power_of_2(n)
 
-        bisectg256_1 = BisectG256_1(alice_pk, bob_pk, i, j, forfait_timeout)
+        bisectg256_1 = BisectG256_1(alice_pk, bob_pk, i, j, leaf_factory, forfait_timeout)
 
         # alice reveals the children and the midstate
         # <alice_sig> <h_i> <h_j_plus_1_a>, <h_j_plus_1_b> <t_i_j_a> <t_i_j_b> <h_i_plus_m_a> <t_{i, i+m-1; a}> <t_{i+m, j; a}>
@@ -324,7 +458,7 @@ class BisectG256_0(StandardAugmentedP2TR):
                 *check_output_contract(bisectg256_1),
 
                 alice_pk,
-                OP_CHECKSIG  # TODO: maybe this is not needed, hashes are not malleable anyway
+                OP_CHECKSIG
             ]),
             arg_specs=[
                 ('alice_sig', SignerType(alice_pk)),
@@ -357,11 +491,12 @@ class BisectG256_0(StandardAugmentedP2TR):
 
 
 class BisectG256_1(StandardAugmentedP2TR):
-    def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, forfait_timeout: int = 10):
+    def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, leaf_factory: Callable[[int], Leaf], forfait_timeout: int = 10):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
         self.i = i
         self.j = j
+        self.leaf_factory = leaf_factory
         self.forfait_timeout = forfait_timeout
 
         assert j > i
@@ -375,10 +510,11 @@ class BisectG256_1(StandardAugmentedP2TR):
         are_children_leaves = m == 1
 
         if are_children_leaves:
-            leaf = Leaf2x(alice_pk, bob_pk)
+            leaf_left = leaf_factory(i)
+            leaf_right = leaf_factory(i + 1)
         else:
-            bisectg256_0_left = BisectG256_0(alice_pk, bob_pk, i, i + m - 1, forfait_timeout)
-            bisectg256_0_right = BisectG256_0(alice_pk, bob_pk, i + m, j, forfait_timeout)
+            bisectg256_0_left = BisectG256_0(alice_pk, bob_pk, i, i + m - 1, leaf_factory, forfait_timeout)
+            bisectg256_0_right = BisectG256_0(alice_pk, bob_pk, i + m, j, leaf_factory, forfait_timeout)
 
         # bob reveals a midstate that doesn't match with Alice's
         # (iterate on the left child)
@@ -427,7 +563,7 @@ class BisectG256_1(StandardAugmentedP2TR):
                     1 + 5, OP_PICK,
                     2 + 2, OP_PICK,
                     *merkle_root(3),
-                    *check_output_contract(leaf),
+                    *check_output_contract(leaf_left),
                 ] if are_children_leaves else [
                     # put on top of the stack: [h_i, h_{i+m; a}, h_{i+m; b}, t_{i, i+m-1; a}, t_{i, i+m-1; b}]
                     10, OP_PICK,  # h_i
@@ -443,7 +579,7 @@ class BisectG256_1(StandardAugmentedP2TR):
                 OP_2DROP, OP_2DROP, OP_2DROP, OP_2DROP, OP_2DROP, OP_DROP,
 
                 bob_pk,
-                OP_CHECKSIG  # TODO: maybe this is not needed, hashes are not malleable anyway
+                OP_CHECKSIG
             ]),
             arg_specs=[
                 ('bob_sig', SignerType(bob_pk)),
@@ -461,7 +597,7 @@ class BisectG256_1(StandardAugmentedP2TR):
             ],
             next_output_fn=lambda args: [ClauseOutput(
                 n=-1,
-                next_contract=leaf if are_children_leaves else bisectg256_0_left,
+                next_contract=leaf_left if are_children_leaves else bisectg256_0_left,
                 next_data=MerkleTree([
                     args['h_i'],
                     args['h_i_plus_m_a'],
@@ -523,7 +659,7 @@ class BisectG256_1(StandardAugmentedP2TR):
                     1 + 9, OP_PICK,
                     2 + 8, OP_PICK,
                     *merkle_root(3),
-                    *check_output_contract(leaf),
+                    *check_output_contract(leaf_right),
                 ] if are_children_leaves else [
                     # put on top of the stack: [h_{i+m}, h_{j+1; a}, h_{j+1; b}, t_{i+m, j; a}, t_{i+m, j; b}]
                     5, OP_PICK,
@@ -557,7 +693,7 @@ class BisectG256_1(StandardAugmentedP2TR):
             ],
             next_output_fn=lambda args: [ClauseOutput(
                 n=-1,
-                next_contract=leaf if are_children_leaves else bisectg256_0_right,
+                next_contract=leaf_right if are_children_leaves else bisectg256_0_right,
                 next_data=MerkleTree([
                     args['h_i_plus_m_a'],
                     args['h_j_plus_1_a'],
@@ -573,98 +709,3 @@ class BisectG256_1(StandardAugmentedP2TR):
         )
 
         super().__init__(NUMS_KEY, [bob_reveal_left, bob_reveal_right])
-
-
-# h_start, h_{end; a}, h_{end; b}
-class Leaf2x(StandardAugmentedP2TR):
-    def __init__(self, alice_pk: bytes, bob_pk: bytes):
-        self.alice_pk = alice_pk
-        self.bob_pk = bob_pk
-
-        # Alice shows that she can indeed correctly perform the step
-        # <alice_sig> <x_start> <h_{end; b}>
-        alice_reveal = StandardClause(
-            name="alice_reveal",
-            script=CScript([
-                OP_TOALTSTACK,
-                OP_DUP,
-
-                # <alice_sig> <x_start> <x_start>  --  <h_{end; b}>
-
-                # compute h_start
-                OP_SHA256,
-                OP_TOALTSTACK,
-
-                # <alice_sig> <x_start>  --  <h_{end; b}> <h_start>
-
-                # compute x_end
-                OP_DUP, OP_ADD,
-
-                # <alice_sig> <x_end>  --  <h_{end; b}> <h_start>
-
-                # compute h_end
-                OP_SHA256,
-
-                # <alice_sig> <h_end>  --  <h_{end; b}> <h_start>
-
-                OP_FROMALTSTACK, OP_SWAP,
-                OP_FROMALTSTACK,
-
-                *merkle_root(3),
-                *check_input_contract(),
-
-                # check Alice's signature
-                alice_pk,
-                OP_CHECKSIG
-            ]),
-            arg_specs=[
-                ('alice_sig', SignerType(alice_pk)),
-                ('x_start', IntType()),
-                ('h_end_b', BytesType()),
-            ]
-        )
-
-        # Bob shows that she can indeed correctly perform the step
-        # <bob_sig> <x_start> <h_{end; a}>
-        bob_reveal = StandardClause(
-            name="bob_reveal",
-            script=CScript([
-                OP_TOALTSTACK,
-                OP_DUP,
-
-                # <alice_sig> <x_start> <x_start>  --  <h_{end; a}>
-
-                # compute h_start
-                OP_SHA256,
-                OP_TOALTSTACK,
-
-                # <alice_sig> <x_start>  --  <h_{end; a}> <h_start>
-
-                # compute x_end
-                OP_DUP, OP_ADD,
-
-                # <alice_sig> <x_end>  --  <h_{end; a}> <h_start>
-
-                # compute h_end
-                OP_SHA256,
-
-                # <alice_sig> <h_end>  --  <h_{end; a}> <h_start>
-
-                OP_FROMALTSTACK, OP_SWAP,
-                OP_FROMALTSTACK, OP_SWAP,
-
-                *merkle_root(3),
-                *check_input_contract(),
-
-                # check Bob's signature
-                bob_pk,
-                OP_CHECKSIG
-            ]),
-            arg_specs=[
-                ('bob_sig', SignerType(bob_pk)),
-                ('x_start', IntType()),
-                ('h_end_a', BytesType()),
-            ]
-        )
-
-        super().__init__(NUMS_KEY, [alice_reveal, bob_reveal])
