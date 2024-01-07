@@ -1,6 +1,6 @@
 
 
-from typing import Optional
+from typing import Optional, Union
 from matt import CCV_FLAG_CHECK_INPUT
 from matt.btctools.script import OP_2DUP, OP_2OVER, OP_3DUP, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_DROP, OP_DUP, OP_FROMALTSTACK, OP_PICK, OP_SHA256, OP_TOALTSTACK, CScript
 from matt.contracts import StandardAugmentedP2TR, StandardP2TR
@@ -68,7 +68,7 @@ def check_input_contract(index: int = -1, pubkey: Optional[bytes] = None) -> CSc
 
 
 # data --
-def check_output_contract(out_contract: StandardP2TR | StandardAugmentedP2TR, index: int = -1, pubkey: Optional[bytes] = None) -> CScript:
+def check_output_contract(out_contract: Union[StandardP2TR, StandardAugmentedP2TR], index: int = -1, pubkey: Optional[bytes] = None) -> CScript:
     assert index >= -1
     assert pubkey is None or len(pubkey) == 32
     return CScript([
