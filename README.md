@@ -53,3 +53,31 @@ The following examples are currently implemented:
 
 - [Vault](examples/vault): an implementation of a vault, largely compatible with [OP_VAULT BIP-0345](https://github.com/bitcoin/bips/pull/1421).
 - [Rock-Paper-Scissors](examples/rps): play Rock-Paper-Scissors on bitcoin.
+
+
+# Tests
+
+This project uses `pytest` to run automated tests. Install it with:
+
+```bash
+$ pip install pytest
+```
+
+The test suite requires a running instance of the MATT-enabled bitcoin-inquisition, for example using the container above. The [init.sh](examples/init.sh) script makes sure that a funded test wallet is loaded.
+
+```bash
+$ docker run -d -p 18443:18443 bigspider/bitcoin_matt
+$ bash ./examples/init.sh
+```
+
+Then, run the tests with 
+
+```bash
+$ pytest
+```
+
+Refer to the [pytest documentation](https://docs.pytest.org/) for more advanced options.
+
+## Report
+
+Some tests produce additional illustrative info about the transactions produced during the contract execution, in a Markdown report called `report.md`.
