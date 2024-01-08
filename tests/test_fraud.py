@@ -1,7 +1,8 @@
-from examples.fraud.fraud_contracts import G256_S0, G256_S1, G256_S2, BisectG256_0, BisectG256_1, Compute2x, Leaf
+from examples.fraud.fraud_contracts import G256_S0, G256_S1, G256_S2, Compute2x
 
 from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
+from matt.hub.fraud import Bisect_1, Bisect_2, Leaf
 from matt.manager import ContractManager, SchnorrSigner
 from matt.merkle import MerkleTree, is_power_of_2
 from matt.btctools import key
@@ -161,7 +162,7 @@ def test_fraud_proof_full(manager: ContractManager):
 
     # inst now represents a step in the bisection protocol corresponding to the root of the computation
 
-    assert isinstance(inst.contract, BisectG256_0)
+    assert isinstance(inst.contract, Bisect_1)
     assert inst.contract.i == 0 and inst.contract.j == 7
     i, j = inst.contract.i, inst.contract.j
     m = (j - i + 1) // 2
@@ -176,7 +177,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   t_right_a=t_node_a(i + m, j)
                   )
 
-    assert isinstance(inst.contract, BisectG256_1)
+    assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 0 and inst.contract.j == 7
 
     [inst] = inst('bob_reveal_right', signer=bob_signer,
@@ -193,7 +194,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   t_right_b=t_node_b(i + m, j),
                   )
 
-    assert isinstance(inst.contract, BisectG256_0)
+    assert isinstance(inst.contract, Bisect_1)
     i, j = inst.contract.i, inst.contract.j
     m = (j - i + 1) // 2
     assert i == 4 and j == 7
@@ -210,7 +211,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   t_right_a=t_node_a(i + m, j)
                   )
 
-    assert isinstance(inst.contract, BisectG256_1)
+    assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 7
 
     [inst] = inst('bob_reveal_left', signer=bob_signer,
@@ -227,7 +228,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   t_right_b=t_node_b(i + m, j),
                   )
 
-    assert isinstance(inst.contract, BisectG256_0)
+    assert isinstance(inst.contract, Bisect_1)
     i, j = inst.contract.i, inst.contract.j
     m = (j - i + 1) // 2
     assert i == 4 and j == 5
@@ -245,7 +246,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   t_right_a=t_node_a(i + m, j)
                   )
 
-    assert isinstance(inst.contract, BisectG256_1)
+    assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 5
 
     [inst] = inst('bob_reveal_right', signer=bob_signer,
