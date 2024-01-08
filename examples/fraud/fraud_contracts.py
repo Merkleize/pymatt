@@ -5,10 +5,10 @@ from typing import Callable, List, Tuple
 from matt import NUMS_KEY
 from matt.argtypes import ArgType, BytesType, IntType, SignerType
 from matt.btctools.common import sha256
-from matt.btctools.script import OP_2DROP, OP_ADD, OP_CAT, OP_CHECKSIG, OP_DROP, OP_DUP, OP_EQUAL, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_NOT, OP_PICK, OP_ROT, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, CScript
+from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKSIG, OP_DUP, OP_EQUAL, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_NOT, OP_PICK, OP_ROT, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, CScript
 from matt.contracts import ClauseOutput, StandardClause, StandardAugmentedP2TR, StandardP2TR
 from matt.merkle import MerkleTree, is_power_of_2
-from matt.script_helpers import check_input_contract, check_output_contract, dup, merkle_root, older
+from matt.script_helpers import check_input_contract, check_output_contract, drop, dup, merkle_root, older
 from matt.utils import encode_wit_element
 
 
@@ -439,7 +439,7 @@ class BisectG256_0(StandardAugmentedP2TR):
                 OP_FROMALTSTACK,
 
                 # check equation for t_{i, j; a}:
-                #     t_{i, j; a} = H(h_i||h_{j+1; a}||h_{i, i+m-1; a}||h_{i+m, j; a}) where m = (j - i + 1)/2
+                #     t_{i, j; a} = H(h_i||h_{j+1; a}||t_{i, i+m-1; a}||t_{i+m, j; a}) where m = (j - i + 1)/2
                 # <alice_sig> <h_i> <h_j_plus_1_a>, <h_j_plus_1_b> <t_i_j_a> <t_i_j_b> <h_i_plus_m_a> <t_{i, i+m-1; a}> <t_{i+m, j; a}>
                 7, OP_PICK,  # pick <h_i>
                 7, OP_PICK,  # pick <h_j_plus_1_a>
@@ -575,8 +575,8 @@ class BisectG256_1(StandardAugmentedP2TR):
                     *check_output_contract(bisectg256_0_left),
                 ]),
 
-                # drop 11 stack elements (only leave <bob_sig>)
-                OP_2DROP, OP_2DROP, OP_2DROP, OP_2DROP, OP_2DROP, OP_DROP,
+                # only leave <bob_sig> on the stack
+                *drop(11),
 
                 bob_pk,
                 OP_CHECKSIG
@@ -671,8 +671,8 @@ class BisectG256_1(StandardAugmentedP2TR):
                     *check_output_contract(bisectg256_0_right),
                 ]),
 
-                # drop 11 stack elements (only leave <bob_sig>)
-                OP_2DROP, OP_2DROP, OP_2DROP, OP_2DROP, OP_2DROP, OP_DROP,
+                # only leave <bob_sig> on the stack
+                *drop(11),
 
                 bob_pk,
                 OP_CHECKSIG

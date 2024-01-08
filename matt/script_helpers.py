@@ -2,7 +2,7 @@
 
 from typing import Optional, Union
 from matt import CCV_FLAG_CHECK_INPUT
-from matt.btctools.script import OP_2DUP, OP_2OVER, OP_3DUP, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_DROP, OP_DUP, OP_FROMALTSTACK, OP_PICK, OP_SHA256, OP_TOALTSTACK, CScript
+from matt.btctools.script import OP_2DROP, OP_2DUP, OP_2OVER, OP_3DUP, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_DROP, OP_DUP, OP_FROMALTSTACK, OP_PICK, OP_SHA256, OP_TOALTSTACK, CScript
 from matt.contracts import StandardAugmentedP2TR, StandardP2TR
 
 
@@ -21,6 +21,13 @@ def dup(n: int = 1) -> CScript:
         # generic, unoptimized solution
         # TODO: can we find an optimal script for every n?
         return CScript([n - 1, OP_PICK] * n)
+
+
+# Drops n elements from the stack
+def drop(n: int = 1) -> CScript:
+    assert n >= 0
+
+    return CScript([OP_2DROP]*(n // 2) + [OP_DROP] * (n % 2))
 
 
 # x_0, x_1, ..., x_{n-1} -- sha256(x_0 || x_1), sha256(x_2 || x_3), ...
