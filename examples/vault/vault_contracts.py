@@ -1,9 +1,10 @@
 from typing import Optional
 
-from matt import CCV_FLAG_CHECK_INPUT, CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY
+from matt import CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY
 from matt.argtypes import BytesType, IntType, SignerType
-from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DROP, OP_DUP, OP_SWAP, OP_TRUE, CScript
+from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_SWAP, OP_TRUE, CScript
 from matt.contracts import ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from matt.script_helpers import check_input_contract, older
 
 
 class Vault(StandardP2TR):
@@ -45,9 +46,9 @@ class Vault(StandardP2TR):
         trigger_and_recover = StandardClause(
             name="trigger_and_revault",
             script=CScript([
-                0, OP_SWAP   # no data tweak
+                0, OP_SWAP,   # no data tweak
                 # <revault_out_i> from the witness
-                - 1,  # current input's taptweak
+                -1,  # current input's taptweak
                 -1,  # taptree
                 CCV_FLAG_DEDUCT_OUTPUT_AMOUNT,  # revault output
                 OP_CHECKCONTRACTVERIFY,
@@ -120,17 +121,10 @@ class Unvaulting(StandardAugmentedP2TR):
             script=CScript([
                 OP_DUP,
 
-                # check that the top of the stack is the embedded data
-                -1,  # index
-                0 if alternate_pk is None else alternate_pk,  # pk
-                -1,   # taptree
-                CCV_FLAG_CHECK_INPUT,
-                OP_CHECKCONTRACTVERIFY,
+                *check_input_contract(-1, alternate_pk),
 
                 # Check timelock
-                self.spend_delay,
-                OP_CHECKSEQUENCEVERIFY,
-                OP_DROP,
+                *older(self.spend_delay),
 
                 # Check that the transaction output is as expected
                 OP_CHECKTEMPLATEVERIFY
