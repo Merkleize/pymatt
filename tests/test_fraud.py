@@ -1,4 +1,4 @@
-from examples.fraud.fraud_contracts import G256_S0, G256_S1, G256_S2, Compute2x
+from examples.game256.game256_contracts import G256_S0, G256_S1, G256_S2, Compute2x
 
 from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
