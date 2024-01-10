@@ -100,7 +100,7 @@ from .. import NUMS_KEY
 from ..argtypes import ArgType, BytesType, SignerType
 from ..btctools.script import OP_CAT, OP_CHECKSIG, OP_EQUAL, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_NOT, OP_PICK, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, CScript
 from ..contracts import ClauseOutput, StandardAugmentedP2TR, StandardClause
-from ..script_helpers import check_input_contract, check_output_contract, drop, dup, merkle_root
+from ..script_helpers import check_input_contract, check_output_contract, drop, dup, merkle_root, older
 
 
 @dataclass
@@ -206,6 +206,8 @@ class Leaf(StandardAugmentedP2TR):
             ]
         )
 
+        # a leaf does not need a forfait clause: the honest party can spend immediately
+
         super().__init__(NUMS_KEY, [alice_reveal, bob_reveal])
 
 
@@ -293,9 +295,22 @@ class Bisect_1(StandardAugmentedP2TR):
             )]
         )
 
-        super().__init__(NUMS_KEY, alice_reveal)
+        # Alice bailed, Bob can take the money (TODO: should burn part of it)
+        forfait = StandardClause(
+            name="forfait",
+            script=CScript([
+                *older(forfait_timeout),
+
+                bob_pk,
+                OP_CHECKSIG
+            ]),
+            arg_specs=[('bob_sig', SignerType(bob_pk))]
+        )
+
+        super().__init__(NUMS_KEY, [alice_reveal, forfait])
 
 
+# TODO: probably more efficient to combine the _left and _right clauses
 class Bisect_2(StandardAugmentedP2TR):
     def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, leaf_factory: Callable[[int], Leaf], forfait_timeout: int = 10):
         self.alice_pk = alice_pk
@@ -514,4 +529,16 @@ class Bisect_2(StandardAugmentedP2TR):
             )]
         )
 
-        super().__init__(NUMS_KEY, [bob_reveal_left, bob_reveal_right])
+        # Bob bailed, Alice can take the money (TODO: should burn part of it)
+        forfait = StandardClause(
+            name="forfait",
+            script=CScript([
+                *older(forfait_timeout),
+
+                alice_pk,
+                OP_CHECKSIG
+            ]),
+            arg_specs=[('bob_sig', SignerType(bob_pk))]
+        )
+
+        super().__init__(NUMS_KEY, [[bob_reveal_left, bob_reveal_right], forfait])
