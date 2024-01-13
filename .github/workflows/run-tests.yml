@@ -39,7 +39,7 @@ jobs:
       - name: Add repository root to PYTHONPATH
         run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
       - name: Run tests and capture output
-        run: pytest -vv >test_output.txt
+        run: pytest -vv
       - name: Upload test output as artifact
         uses: actions/upload-artifact@v2
         with:

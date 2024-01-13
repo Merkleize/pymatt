@@ -15,7 +15,7 @@ from .btctools.key import ExtendedKey, sign_schnorr
 from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut
 from .btctools.script import TaprootInfo
 from .btctools.segwit_addr import encode_segwit_address
-from .contracts import P2TR, AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardAugmentedP2TR, StandardP2TR
+from .contracts import P2TR, AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardAugmentedP2TR, StandardP2TR, ContractState
 from .utils import wait_for_output, wait_for_spending_tx
 
 
@@ -52,9 +52,8 @@ class ContractInstanceStatus(Enum):
 class ContractInstance:
     def __init__(self, contract: Union[StandardP2TR, StandardAugmentedP2TR]):
         self.contract = contract
-        self.data = None if not self.is_augm() else b'\0'*32
-
-        self.data_expanded = None  # TODO: figure out a good API for this
+        self.data: Optional[bytes] = None
+        self.data_expanded: Optional[ContractState] = None  # TODO: figure out a good API for this
 
         self.manager: ContractManager = None
 
@@ -164,13 +163,24 @@ class ContractManager:
     def get_spend_tx(
         self,
         spends: Union[Tuple[ContractInstance, str, dict], List[Tuple[ContractInstance, str, dict]]],
-        output_amounts: Dict[int, int] = {}
+        *,
+        output_amounts: Dict[int, int] = {},
+        outputs: List[CTxOut] = []
     ) -> Tuple[CTransaction, List[bytes]]:
+        if len(output_amounts) > 0 and len(outputs) > 0:
+            # TODO: in principle, some outputs could be constrained by the clauses, and others could be completely specified
+            # by the caller. For now, we don't support mixing
+            raise ValueError("Either output_amounts or outputs must be given, but not both")
+
         if not isinstance(spends, list):
             spends = [spends]
 
         tx = CTransaction()
         tx.nVersion = 2
+
+        if len(outputs) > 0:
+            tx.vout = outputs
+
         outputs_map: Dict[int, CTxOut] = {}
 
         tx.vin = [CTxIn(outpoint=instance.outpoint) for instance, _, _ in spends]
@@ -184,7 +194,7 @@ class ContractManager:
                 raise ValueError(f"Clause {clause_name} not found")
             clause = instance.contract.clauses[clause_idx]
 
-            next_outputs = clause.next_outputs(args)
+            next_outputs = clause.next_outputs(args, instance.data_expanded)
             if isinstance(next_outputs, CTransaction):
                 if len(tx.vin) != 1 or len(next_outputs.vin) != 1:
                     raise ValueError("CTV clauses are only supported for single-input spends")  # TODO: generalize
@@ -200,36 +210,38 @@ class ContractManager:
                     if isinstance(out_contract, (P2TR, OpaqueP2TR)):
                         out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
                     elif isinstance(out_contract, AugmentedP2TR):
-                        if clause_output.next_data is None:
+                        if clause_output.next_state is None:
                             raise ValueError("Missing data for augmented output")
-                        out_scriptPubKey = out_contract.get_tr_info(clause_output.next_data).scriptPubKey
+                        out_scriptPubKey = out_contract.get_tr_info(clause_output.next_state.encode()).scriptPubKey
                     else:
                         raise ValueError("Unsupported contract type")
 
-                    if clause_output.n in outputs_map:
-                        if outputs_map[clause_output.n].scriptPubKey != out_scriptPubKey:
+                    out_index = input_index if clause_output.n == -1 else clause_output.n
+
+                    if out_index in outputs_map:
+                        if outputs_map[out_index].scriptPubKey != out_scriptPubKey:
                             raise ValueError(
-                                f"Clashing output script for output {clause_output.n}: specifications for input {input_index} don't match a previous one")
+                                f"Clashing output script for output {out_index}: specifications for input {input_index} don't match a previous one")
                     else:
-                        outputs_map[clause_output.n] = CTxOut(0, out_scriptPubKey)
+                        outputs_map[out_index] = CTxOut(0, out_scriptPubKey)
 
                     if clause_output.next_amount == ClauseOutputAmountBehaviour.PRESERVE_OUTPUT:
-                        outputs_map[clause_output.n].nValue += ccv_amount
+                        outputs_map[out_index].nValue += ccv_amount
                         preserve_output_used = True
                     elif clause_output.next_amount == ClauseOutputAmountBehaviour.DEDUCT_OUTPUT:
                         if preserve_output_used:
                             raise ValueError(
                                 "DEDUCT_OUTPUT clause outputs must be declared before PRESERVE_OUTPUT clause outputs")
-                        if clause_output.n not in output_amounts:
+                        if out_index not in output_amounts:
                             raise ValueError(
                                 "The output amount must be specified for clause outputs using DEDUCT_AMOUNT")
 
-                        outputs_map[clause_output.n].nValue = output_amounts[clause_output.n]
-                        ccv_amount -= output_amounts[clause_output.n]
+                        outputs_map[out_index].nValue = output_amounts[out_index]
+                        ccv_amount -= output_amounts[out_index]
                     else:
                         raise ValueError("Only PRESERVE_OUTPUT and DEDUCT_OUTPUT clause outputs are supported")
 
-        if not has_ctv_clause:
+        if not has_ctv_clause and len(outputs_map) > 0:
             if set(outputs_map.keys()) != set(range(len(outputs_map))):
                 raise ValueError("Some outputs are not correctly specified")
             tx.vout = [outputs_map[i] for i in range(len(outputs_map))]
@@ -323,7 +335,7 @@ class ContractManager:
                 raise ValueError(f"Clause {instance.spending_clause} not found")
             clause = instance.contract.clauses[clause_idx]
 
-            next_outputs = clause.next_outputs(instance.spending_args)
+            next_outputs = clause.next_outputs(instance.spending_args, instance.data_expanded)
 
             # We go through all the outputs produced by spending this transaction,
             # and add them to the manager if they are standard
@@ -333,7 +345,9 @@ class ContractManager:
                 pass
             else:
                 for clause_output in next_outputs:
-                    if clause_output.n in out_contracts:
+                    output_index = vin if clause_output.n == -1 else clause_output.n
+
+                    if output_index in out_contracts:
                         continue  # output already specified by another input
 
                     out_contract = clause_output.next_contract
@@ -342,26 +356,27 @@ class ContractManager:
                     if isinstance(out_contract, (P2TR, OpaqueP2TR, StandardP2TR)):
                         continue  # nothing to do, will not track this output
                     elif isinstance(out_contract, StandardAugmentedP2TR):
-                        if clause_output.next_data is None:
+                        if clause_output.next_state is None:
                             raise ValueError("Missing data for augmented output")
-                        new_instance.data = clause_output.next_data
+                        new_instance.data = clause_output.next_state.encode()
+                        new_instance.data_expanded = clause_output.next_state
                     else:
                         raise ValueError("Unsupported contract type")
 
                     new_instance.last_height = instance.last_height
 
-                    new_instance.outpoint = COutPoint(int(tx.hash, 16), clause_output.n)
+                    new_instance.outpoint = COutPoint(int(tx.hash, 16), output_index)
                     new_instance.funding_tx = tx
                     new_instance.status = ContractInstanceStatus.FUNDED
 
-                    out_contracts[clause_output.n] = new_instance
+                    out_contracts[output_index] = new_instance
 
         result = list(out_contracts.values())
         for instance in result:
             self.add_instance(instance)
         return result
 
-    def fund_instance(self, contract: Union[StandardP2TR, StandardAugmentedP2TR], amount: int, data: Optional[bytes] = None) -> ContractInstance:
+    def fund_instance(self, contract: Union[StandardP2TR, StandardAugmentedP2TR], amount: int, data: Optional[ContractState] = None) -> ContractInstance:
         """
         Convenience method to create an instance of a contract, add it to the ContractManager,
         and send a transaction to fund it with a certain amount.
@@ -374,7 +389,8 @@ class ContractManager:
         if isinstance(contract, StandardAugmentedP2TR):
             if data is None:
                 raise ValueError("The data must be provided for an augmented P2TR contract instance")
-            instance.data = data
+            instance.data_expanded = data
+            instance.data = data.encode()
         self.add_instance(instance)
         txid = self.rpc.sendtoaddress(instance.get_address(), amount/100_000_000)
         self.wait_for_outpoint(instance, txid)
@@ -391,14 +407,15 @@ class ContractManager:
                         outputs generated by the clause.
         :return: A list of ContractInstances resulting from the spend transaction.
         """
-        spend_tx, sighashes = self.get_spend_tx((instance, clause_name, args))
+
+        if outputs is None:
+            outputs = []
+
+        spend_tx, sighashes = self.get_spend_tx((instance, clause_name, args), outputs=outputs)
 
         assert len(sighashes) == 1
 
         sighash = sighashes[0]
-
-        if outputs is not None:
-            spend_tx.vout.extend(outputs)
 
         clause = instance.contract._clauses_dict[clause_name]  # TODO: refactor, accessing private member
         for arg_name, arg_type in clause.arg_specs:

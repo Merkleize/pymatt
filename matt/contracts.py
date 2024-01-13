@@ -1,6 +1,7 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 from .argtypes import ArgType
 from .btctools import script
@@ -14,6 +15,32 @@ class AbstractContract:
     pass
 
 
+class ContractState(ABC):
+    """
+    This class describes the "state" of a StandardAugmented contract, that is, the full data committed to
+    inside the data tweak.
+    """
+
+    @abstractmethod
+    def encode(self) -> bytes:
+        """
+        Computes the 32-byte data tweak that represents the commitment to the state of the contract.
+        """
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def encoder_script(*args, **kwargs) -> CScript:
+        """
+        Returns a CScript that computes the commitment to the state, assuming that the top of the stack contains the
+        values of the individual stack items that allow to compute the state commitment, as output by the encode() function.
+        Contracts might decide not to implement this (and raise an error if this is called), but they must document how the
+        state commitment should be computed if not. Contracts implementing it should document what the expected stack
+        elements are when the encoder_script is used.
+        """
+        pass
+
+
 class ClauseOutputAmountBehaviour(Enum):
     PRESERVE_OUTPUT = 0  # The output should be at least as large as the input
     IGNORE_OUTPUT = 1  # The output amount is not checked
@@ -24,11 +51,11 @@ class ClauseOutputAmountBehaviour(Enum):
 class ClauseOutput:
     n: Optional[int]
     next_contract: AbstractContract  # only StandardP2TR and StandardAugmentedP2TR are supported so far
-    next_data: Optional[bytes] = None  # only meaningful if c is augmented
+    next_state: Optional[ContractState] = None  # only meaningful if c is augmented
     next_amount: ClauseOutputAmountBehaviour = ClauseOutputAmountBehaviour.PRESERVE_OUTPUT
 
     def __repr__(self):
-        return f"ClauseOutput(n={self.n}, next_contract={self.next_contract}, next_data={self.next_data}, next_amount={self.next_amount})"
+        return f"ClauseOutput(n={self.n}, next_contract={self.next_contract}, next_state={self.next_state}, next_amount={self.next_amount})"
 
 
 class Clause:
@@ -55,15 +82,15 @@ class Clause:
 # Other types of generic treatable clauses could be defined (for example, a MiniscriptClause).
 # Moreover, it specifies a function that converts the arguments of the clause, to the data of the next output.
 class StandardClause(Clause):
-    def __init__(self, name: str, script: CScript, arg_specs: List[Tuple[str, ArgType]], next_output_fn: Optional[Callable[[dict], Union[List[ClauseOutput], CTransaction]]] = None):
+    def __init__(self, name: str, script: CScript, arg_specs: List[Tuple[str, ArgType]], next_outputs_fn: Optional[Callable[[dict, ContractState], Union[List[ClauseOutput], CTransaction]]] = None):
         super().__init__(name, script)
         self.arg_specs = arg_specs
 
-        self.next_outputs_fn = next_output_fn
+        self.next_outputs_fn = next_outputs_fn
 
-    def next_outputs(self, args: dict) -> Union[List[ClauseOutput], CTransaction]:
+    def next_outputs(self, args: dict, state: Optional[ContractState]) -> Union[List[ClauseOutput], CTransaction]:
         if self.next_outputs_fn is not None:
-            return self.next_outputs_fn(args)
+            return self.next_outputs_fn(args, state)
         else:
             return []
 
@@ -233,7 +260,7 @@ class StandardP2TR(P2TR):
         return f"{self.__class__.__name__}(internal_pubkey={self.internal_pubkey.hex()})"
 
 
-class StandardAugmentedP2TR(AugmentedP2TR):
+class StandardAugmentedP2TR(AugmentedP2TR, ABC):
     """
     An AugmentedP2TR where all the transitions are given by a StandardClause.
     """
@@ -262,3 +289,8 @@ class StandardAugmentedP2TR(AugmentedP2TR):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(naked_internal_pubkey={self.naked_internal_pubkey.hex()})"
+
+    @property
+    @abstractmethod
+    def State() -> Type[ContractState]:
+        pass

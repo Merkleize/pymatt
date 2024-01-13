@@ -12,10 +12,10 @@ def vch2bn(s: bytes) -> int:
     """Convert bitcoin-specific little endian format to number."""
     if len(s) == 0:
         return 0
-    # The most significant bit is the sign bit.
-    is_negative = s[0] & 0x80 != 0
+    # The most significant bit is the sign bit. (remembering it's little-endian)
+    is_negative = s[-1] & 0x80 != 0
     # Mask off the sign bit.
-    s_abs = bytes([s[0] & 0x7f]) + s[1:]
+    s_abs = s[:-1] + bytes([s[-1] & 0x7f])
     v_abs = int.from_bytes(s_abs, 'little')
     # Return as negative number if it's negative.
     return -v_abs if is_negative else v_abs
