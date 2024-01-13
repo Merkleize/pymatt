@@ -32,7 +32,7 @@ def drop(n: int = 1) -> CScript:
 
 # x_0, x_1, ..., x_{n-1} -- sha256(x_0 || x_1), sha256(x_2 || x_3), ...
 # if n is odd, the last element is copied unchanged
-def sha256cat(n: int) -> CScript:
+def reduce_merkle_layer(n: int) -> CScript:
     assert n >= 1
 
     if n == 1:
@@ -40,10 +40,10 @@ def sha256cat(n: int) -> CScript:
     elif n == 2:
         return CScript([OP_CAT, OP_SHA256])
     if n % 2 == 1:
-        return CScript([OP_TOALTSTACK, *sha256cat(n-1), OP_FROMALTSTACK])
+        return CScript([OP_TOALTSTACK, *reduce_merkle_layer(n-1), OP_FROMALTSTACK])
     else:
         # compute the last pair, reduce to the case with one less pair
-        return CScript([OP_CAT, OP_SHA256, OP_TOALTSTACK, *sha256cat(n-2), OP_FROMALTSTACK])
+        return CScript([OP_CAT, OP_SHA256, OP_TOALTSTACK, *reduce_merkle_layer(n-2), OP_FROMALTSTACK])
 
 
 # x_0, x_1, ..., x_{n - 1} -- x_0, x_1, ..., x_{n - 1} root
@@ -55,7 +55,7 @@ def merkle_root(n_leaves: int) -> CScript:
     ret = []
     # compute layer by layer, from the bottom up to the root
     while n_leaves > 1:
-        ret.extend(sha256cat(n_leaves))
+        ret.extend(reduce_merkle_layer(n_leaves))
         n_leaves = (n_leaves + 1) // 2
     return CScript(ret)
 
