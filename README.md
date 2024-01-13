@@ -49,11 +49,14 @@ The `examples` folder contains some utility scripts to work with regtest bitcoin
 - [init.sh](examples/init.sh) creates/loads and funds a wallet named `testwallet`. Run it once before the examples and you're good to go.
 - [fund.sh](examples/fund.sh) that allows to fund a certain address.
 
-The following examples are currently implemented:
+The following examples are currently implemented
 
-- [Vault](examples/vault): an implementation of a vault, largely compatible with [OP_VAULT BIP-0345](https://github.com/bitcoin/bips/pull/1421).
-- [Rock-Paper-Scissors](examples/rps): play Rock-Paper-Scissors on bitcoin.
+- [Vault](examples/vault) [cli]: an implementation of a vault, largely compatible with [OP_VAULT BIP-0345](https://github.com/bitcoin/bips/pull/1421).
+- [Rock-Paper-Scissors](examples/rps) [cli]: play Rock-Paper-Scissors on bitcoin.
+- [RAM](examples/ram) [cli]: a a contract that uses a Merkle tree to store a vector of arbitrary length in size, with transitions that allow to modify one element of the vector.
+- [game256](examples/game256): Implements an end-2-end execution of the toy example for fraud proofs [drafted in bitcoin-dev](https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2022-November/021205.html).
 
+For the ones marked with [cli], a simple interactive tool allows to play with the contract. More code examples can be found in the test suite.
 
 # Tests
 
