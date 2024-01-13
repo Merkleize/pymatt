@@ -15,7 +15,7 @@ alice_key = key.ExtendedKey.deserialize(
 bob_key = key.ExtendedKey.deserialize(
     "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
-# TODO: make outputs that sends to Alice/Bob, instead of using burn addresses :P
+# TODO: make outputs that sends to Alice/Bob, instead of using burn addresses
 
 
 def test_leaf_reveal_alice(manager: ContractManager):
@@ -29,11 +29,8 @@ def test_leaf_reveal_alice(manager: ContractManager):
     h_end_alice = sha256(encode_wit_element(x_end_alice))
     h_end_bob = sha256(encode_wit_element(x_end_bob))
 
-    data = [h_start, h_end_alice, h_end_bob]
-    mt = MerkleTree(data)
-
-    L_inst = manager.fund_instance(L, AMOUNT, data=mt.root)
-    L_inst.data_expanded = data
+    L_inst = manager.fund_instance(L, AMOUNT, data=L.State(
+        h_start=h_start, h_end_alice=h_end_alice, h_end_bob=h_end_bob))
 
     outputs = [
         CTxOut(
@@ -62,11 +59,8 @@ def test_leaf_reveal_bob(manager: ContractManager):
     h_end_alice = sha256(encode_wit_element(x_end_alice))
     h_end_bob = sha256(encode_wit_element(x_end_bob))
 
-    data = [h_start, h_end_alice, h_end_bob]
-    mt = MerkleTree(data)
-
-    L_inst = manager.fund_instance(L, AMOUNT, data=mt.root)
-    L_inst.data_expanded = data
+    L_inst = manager.fund_instance(L, AMOUNT, data=L.State(
+        h_start=h_start, h_end_alice=h_end_alice, h_end_bob=h_end_bob))
 
     outputs = [
         CTxOut(
@@ -87,8 +81,6 @@ def test_leaf_reveal_bob(manager: ContractManager):
 def test_fraud_proof_full(manager: ContractManager):
     alice_trace = [2, 4, 8, 16, 32, 64, 127, 254, 508]
     bob_trace = [2, 4, 8, 16, 32, 64, 128, 256, 512]
-
-    # TODO: the contract instance should be able to keep track of the data contained
 
     assert alice_trace[0] == bob_trace[0] and len(alice_trace) == len(bob_trace)
 
@@ -137,28 +129,27 @@ def test_fraud_proof_full(manager: ContractManager):
     [inst] = inst('choose', signer=bob_signer, x=x)
 
     assert isinstance(inst.contract, G256_S1)
+    assert isinstance(inst.data_expanded, G256_S1.State) and inst.data_expanded.x == x
 
     t_a = t_node_a(0, n - 1)  # trace root according to Alice
     t_b = t_node_b(0, n - 1)  # trace root according to Bob
 
     # Alice reveals her answer
     [inst] = inst('reveal', signer=alice_signer,
+                  x=x,
                   y=y,
-                  t_a=t_a,
-                  sha256_x=sha256(encode_wit_element(x))
-                  )
-    inst.data = MerkleTree([t_a, sha256(encode_wit_element(y)), sha256(encode_wit_element(x))]).root
+                  t_a=t_a)
 
     assert isinstance(inst.contract, G256_S2)
+    assert inst.data_expanded == G256_S2.State(t_a=t_a, x=x, y=y)
 
     # Bob disagrees and starts the challenge
     [inst] = inst('start_challenge', signer=bob_signer,
                   t_a=t_a,
-                  sha256_y=sha256(encode_wit_element(y)),
-                  sha256_x=sha256(encode_wit_element(x)),
+                  x=x,
+                  y=y,
                   z=z,
-                  t_b=t_b
-                  )
+                  t_b=t_b)
 
     # inst now represents a step in the bisection protocol corresponding to the root of the computation
 

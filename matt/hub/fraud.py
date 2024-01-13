@@ -99,7 +99,7 @@ from matt.merkle import MerkleTree, is_power_of_2
 from .. import NUMS_KEY
 from ..argtypes import ArgType, BytesType, SignerType
 from ..btctools.script import OP_CAT, OP_CHECKSIG, OP_EQUAL, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_NOT, OP_PICK, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, CScript
-from ..contracts import ClauseOutput, StandardAugmentedP2TR, StandardClause
+from ..contracts import ClauseOutput, StandardAugmentedP2TR, StandardClause, ContractState
 from ..script_helpers import check_input_contract, check_output_contract, drop, dup, merkle_root, older
 
 
@@ -111,6 +111,18 @@ class Computer:
 
 
 class Leaf(StandardAugmentedP2TR):
+    @dataclass
+    class State(ContractState):
+        h_start: bytes
+        h_end_alice: bytes
+        h_end_bob: bytes
+
+        def encode(self):
+            return MerkleTree([self.h_start, self.h_end_alice, self.h_end_bob]).root
+
+        def encoder_script():
+            return CScript([*merkle_root(3)])
+
     def __init__(self, alice_pk: bytes, bob_pk: bytes, computer: Computer):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
@@ -212,6 +224,26 @@ class Leaf(StandardAugmentedP2TR):
 
 
 class Bisect_1(StandardAugmentedP2TR):
+    @dataclass
+    class State(ContractState):
+        h_i: bytes
+        h_j_plus_1_a: bytes
+        h_j_plus_1_b: bytes
+        t_i_j_a: bytes
+        t_i_j_b: bytes
+
+        def encode(self):
+            return MerkleTree([
+                self.h_i,
+                self.h_j_plus_1_a,
+                self.h_j_plus_1_b,
+                self.t_i_j_a,
+                self.t_i_j_b
+            ]).root
+
+        def encoder_script():
+            return CScript([*merkle_root(5)])
+
     def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, leaf_factory: Callable[[int], Leaf], forfait_timeout: int = 10):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
@@ -240,7 +272,7 @@ class Bisect_1(StandardAugmentedP2TR):
                 *dup(5),
 
                 # verify the embedded data
-                *merkle_root(5),
+                *self.State.encoder_script(),
                 *check_input_contract(),
 
                 OP_FROMALTSTACK,
@@ -262,7 +294,7 @@ class Bisect_1(StandardAugmentedP2TR):
                 OP_EQUALVERIFY,  # verify that computed and committed values for <t_i_j_a> match
 
                 # check output
-                *merkle_root(8),
+                *bisect_2.State.encoder_script(),
                 *check_output_contract(bisect_2),
 
                 alice_pk,
@@ -279,19 +311,19 @@ class Bisect_1(StandardAugmentedP2TR):
                 ('t_left_a', BytesType()),
                 ('t_right_a', BytesType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(
+            next_outputs_fn=lambda args, _: [ClauseOutput(
                 n=-1,
                 next_contract=bisect_2,
-                next_data=MerkleTree([
-                    args['h_i'],
-                    args['h_j_plus_1_a'],
-                    args['h_j_plus_1_b'],
-                    args['t_i_j_a'],
-                    args['t_i_j_b'],
-                    args['h_i_plus_m_a'],
-                    args['t_left_a'],
-                    args['t_right_a'],
-                ]).root
+                next_state=bisect_2.State(
+                    h_i=args['h_i'],
+                    h_j_plus_1_a=args['h_j_plus_1_a'],
+                    h_j_plus_1_b=args['h_j_plus_1_b'],
+                    t_i_j_a=args['t_i_j_a'],
+                    t_i_j_b=args['t_i_j_b'],
+                    h_i_plus_m_a=args['h_i_plus_m_a'],
+                    t_left_a=args['t_left_a'],
+                    t_right_a=args['t_right_a'],
+                )
             )]
         )
 
@@ -312,6 +344,32 @@ class Bisect_1(StandardAugmentedP2TR):
 
 # TODO: probably more efficient to combine the _left and _right clauses
 class Bisect_2(StandardAugmentedP2TR):
+    @dataclass
+    class State(ContractState):
+        h_i: bytes
+        h_j_plus_1_a: bytes
+        h_j_plus_1_b: bytes
+        t_i_j_a: bytes
+        t_i_j_b: bytes
+        h_i_plus_m_a: bytes
+        t_left_a: bytes
+        t_right_a: bytes
+
+        def encode(self):
+            return MerkleTree([
+                self.h_i,
+                self.h_j_plus_1_a,
+                self.h_j_plus_1_b,
+                self.t_i_j_a,
+                self.t_i_j_b,
+                self.h_i_plus_m_a,
+                self.t_left_a,
+                self.t_right_a
+            ]).root
+
+        def encoder_script():
+            return CScript([*merkle_root(8)])
+
     def __init__(self, alice_pk: bytes, bob_pk: bytes, i: int, j: int, leaf_factory: Callable[[int], Leaf], forfait_timeout: int = 10):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
@@ -334,8 +392,8 @@ class Bisect_2(StandardAugmentedP2TR):
             leaf_left = leaf_factory(i)
             leaf_right = leaf_factory(i + 1)
         else:
-            bisectg_1_left = Bisect_1(alice_pk, bob_pk, i, i + m - 1, leaf_factory, forfait_timeout)
-            bisectg_1_right = Bisect_1(alice_pk, bob_pk, i + m, j, leaf_factory, forfait_timeout)
+            bisect_1_left = Bisect_1(alice_pk, bob_pk, i, i + m - 1, leaf_factory, forfait_timeout)
+            bisect_1_right = Bisect_1(alice_pk, bob_pk, i + m, j, leaf_factory, forfait_timeout)
 
         # bob reveals a midstate that doesn't match with Alice's
         # (iterate on the left child)
@@ -350,7 +408,7 @@ class Bisect_2(StandardAugmentedP2TR):
                 *dup(8),
 
                 # verify the embedded data
-                *merkle_root(8),
+                *self.State.encoder_script(),
                 *check_input_contract(),
 
                 OP_FROMALTSTACK,
@@ -383,7 +441,7 @@ class Bisect_2(StandardAugmentedP2TR):
                     10, OP_PICK,  # h_i
                     1 + 5, OP_PICK,
                     2 + 2, OP_PICK,
-                    *merkle_root(3),
+                    *leaf_left.State.encoder_script(),
                     *check_output_contract(leaf_left),
                 ] if are_children_leaves else [
                     # put on top of the stack: [h_i, h_{i+m; a}, h_{i+m; b}, t_{i, i+m-1; a}, t_{i, i+m-1; b}]
@@ -392,8 +450,8 @@ class Bisect_2(StandardAugmentedP2TR):
                     2 + 2, OP_PICK,
                     3 + 4, OP_PICK,
                     4 + 1, OP_PICK,
-                    *merkle_root(5),
-                    *check_output_contract(bisectg_1_left),
+                    *bisect_1_left.State.encoder_script(),
+                    *check_output_contract(bisect_1_left),
                 ]),
 
                 # only leave <bob_sig> on the stack
@@ -416,20 +474,20 @@ class Bisect_2(StandardAugmentedP2TR):
                 ('t_left_b', BytesType()),
                 ('t_right_b', BytesType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(
+            next_outputs_fn=lambda args, _: [ClauseOutput(
                 n=-1,
-                next_contract=leaf_left if are_children_leaves else bisectg_1_left,
-                next_data=MerkleTree([
-                    args['h_i'],
-                    args['h_i_plus_m_a'],
-                    args['h_i_plus_m_b'],
-                ]).root if are_children_leaves else MerkleTree([
-                    args['h_i'],
-                    args['h_i_plus_m_a'],
-                    args['h_i_plus_m_b'],
-                    args['t_left_a'],
-                    args['t_left_b'],
-                ]).root
+                next_contract=leaf_left if are_children_leaves else bisect_1_left,
+                next_state=leaf_left.State(
+                    h_start=args['h_i'],
+                    h_end_alice=args['h_i_plus_m_a'],
+                    h_end_bob=args['h_i_plus_m_b'],
+                ) if are_children_leaves else bisect_1_left.State(
+                    h_i=args['h_i'],
+                    h_j_plus_1_a=args['h_i_plus_m_a'],
+                    h_j_plus_1_b=args['h_i_plus_m_b'],
+                    t_i_j_a=args['t_left_a'],
+                    t_i_j_b=args['t_left_b'],
+                )
             )]
         )
 
@@ -446,7 +504,7 @@ class Bisect_2(StandardAugmentedP2TR):
                 *dup(8),
 
                 # verify the embedded data
-                *merkle_root(8),
+                *self.State.encoder_script(),
                 *check_input_contract(),
 
                 OP_FROMALTSTACK,
@@ -479,7 +537,7 @@ class Bisect_2(StandardAugmentedP2TR):
                     5, OP_PICK,
                     1 + 9, OP_PICK,
                     2 + 8, OP_PICK,
-                    *merkle_root(3),
+                    *leaf_right.State.encoder_script(),
                     *check_output_contract(leaf_right),
                 ] if are_children_leaves else [
                     # put on top of the stack: [h_{i+m}, h_{j+1; a}, h_{j+1; b}, t_{i+m, j; a}, t_{i+m, j; b}]
@@ -488,8 +546,8 @@ class Bisect_2(StandardAugmentedP2TR):
                     2 + 8, OP_PICK,
                     3 + 3, OP_PICK,
                     4 + 0, OP_PICK,
-                    *merkle_root(5),
-                    *check_output_contract(bisectg_1_right),
+                    *bisect_1_right.State.encoder_script(),
+                    *check_output_contract(bisect_1_right),
                 ]),
 
                 # only leave <bob_sig> on the stack
@@ -512,20 +570,20 @@ class Bisect_2(StandardAugmentedP2TR):
                 ('t_left_b', BytesType()),
                 ('t_right_b', BytesType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(
+            next_outputs_fn=lambda args, _: [ClauseOutput(
                 n=-1,
-                next_contract=leaf_right if are_children_leaves else bisectg_1_right,
-                next_data=MerkleTree([
-                    args['h_i_plus_m_a'],
-                    args['h_j_plus_1_a'],
-                    args['h_j_plus_1_b'],
-                ]).root if are_children_leaves else MerkleTree([
-                    args['h_i_plus_m_a'],  # this is equal to h_i_plus_m_b, as it's checked in the script!
-                    args['h_j_plus_1_a'],
-                    args['h_j_plus_1_b'],
-                    args['t_right_a'],
-                    args['t_right_b'],
-                ]).root
+                next_contract=leaf_right if are_children_leaves else bisect_1_right,
+                next_state=leaf_right.State(
+                    h_start=args['h_i_plus_m_a'],
+                    h_end_alice=args['h_j_plus_1_a'],
+                    h_end_bob=args['h_j_plus_1_b'],
+                ) if are_children_leaves else bisect_1_right.State(
+                    h_i=args['h_i_plus_m_a'],  # this is equal to h_i_plus_m_b, as it's checked in the script!
+                    h_j_plus_1_a=args['h_j_plus_1_a'],
+                    h_j_plus_1_b=args['h_j_plus_1_b'],
+                    t_i_j_a=args['t_right_a'],
+                    t_i_j_b=args['t_right_b'],
+                )
             )]
         )
 

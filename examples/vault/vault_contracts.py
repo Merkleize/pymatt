@@ -1,9 +1,10 @@
+from dataclasses import dataclass
 from typing import Optional
 
 from matt import CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY
 from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_SWAP, OP_TRUE, CScript
-from matt.contracts import ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR
+from matt.contracts import ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR, ContractState
 from matt.script_helpers import check_input_contract, older
 
 
@@ -38,8 +39,11 @@ class Vault(StandardP2TR):
                 ('ctv_hash', BytesType()),
                 ('out_i', IntType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(
-                n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash'])]
+            next_outputs_fn=lambda args, _: [ClauseOutput(
+                n=args['out_i'],
+                next_contract=unvaulting,
+                next_state=unvaulting.State(ctv_hash=args["ctv_hash"])
+            )]
         )
 
         # witness: <sig> <ctv-hash> <trigger_out_i> <revault_out_i>
@@ -68,10 +72,13 @@ class Vault(StandardP2TR):
                 ('out_i', IntType()),
                 ('revault_out_i', IntType()),
             ],
-            next_output_fn=lambda args: [
+            next_outputs_fn=lambda args, _: [
                 ClauseOutput(n=args['revault_out_i'], next_contract=self,
                              next_amount=ClauseOutputAmountBehaviour.DEDUCT_OUTPUT),
-                ClauseOutput(n=args['out_i'], next_contract=unvaulting, next_data=args['ctv_hash']),
+                ClauseOutput(
+                    n=args['out_i'],
+                    next_contract=unvaulting,
+                    next_state=unvaulting.State(ctv_hash=args["ctv_hash"])),
             ]
         )
 
@@ -90,7 +97,7 @@ class Vault(StandardP2TR):
             arg_specs=[
                 ('out_i', IntType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
+            next_outputs_fn=lambda args, _: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
         if self.has_partial_revault:
@@ -108,6 +115,16 @@ class Vault(StandardP2TR):
 
 
 class Unvaulting(StandardAugmentedP2TR):
+    @dataclass
+    class State(ContractState):
+        ctv_hash: bytes
+
+        def encode(self):
+            return self.ctv_hash
+
+        def encoder_script():
+            return CScript([])
+
     def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes):
         assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32
 
@@ -149,7 +166,7 @@ class Unvaulting(StandardAugmentedP2TR):
             arg_specs=[
                 ('out_i', IntType()),
             ],
-            next_output_fn=lambda args: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
+            next_outputs_fn=lambda args, _: [ClauseOutput(n=args['out_i'], next_contract=OpaqueP2TR(recover_pk))]
         )
 
         super().__init__(NUMS_KEY if alternate_pk is None else alternate_pk, [withdrawal, recover])

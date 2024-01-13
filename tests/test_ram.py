@@ -17,7 +17,8 @@ def test_withdraw(rpc, manager: ContractManager):
             data = [sha256(i.to_bytes(1, byteorder='little')) for i in range(size)]
             mt = MerkleTree(data)
 
-            R_inst = manager.fund_instance(RAM(len(data)), AMOUNT, data=mt.root)
+            R = RAM(len(data))
+            R_inst = manager.fund_instance(R, AMOUNT, data=R.State(data))
 
             outputs = [
                 CTxOut(
@@ -44,7 +45,8 @@ def test_write(manager: ContractManager):
     data = [sha256(i.to_bytes(1, byteorder='little')) for i in range(size)]
     mt = MerkleTree(data)
 
-    R_inst = manager.fund_instance(RAM(len(data)), AMOUNT, data=mt.root)
+    R = RAM(len(data))
+    R_inst = manager.fund_instance(R, AMOUNT, data=R.State(data))
 
     out_instances = R_inst("write",
                            merkle_root=mt.root,
@@ -68,7 +70,8 @@ def test_write_loop(manager: ContractManager):
 
     data = [sha256(i.to_bytes(1, byteorder='little')) for i in range(size)]
 
-    R_inst = manager.fund_instance(RAM(len(data)), AMOUNT, data=MerkleTree(data).root)
+    R = RAM(len(data))
+    R_inst = manager.fund_instance(R, AMOUNT, data=R.State(data))
 
     for i in range(16):
         leaf_index = i % size

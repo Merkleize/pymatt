@@ -15,7 +15,7 @@ from .btctools.key import ExtendedKey, sign_schnorr
 from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut
 from .btctools.script import TaprootInfo
 from .btctools.segwit_addr import encode_segwit_address
-from .contracts import P2TR, AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardAugmentedP2TR, StandardP2TR
+from .contracts import P2TR, AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardAugmentedP2TR, StandardP2TR, ContractState
 from .utils import wait_for_output, wait_for_spending_tx
 
 
@@ -52,9 +52,8 @@ class ContractInstanceStatus(Enum):
 class ContractInstance:
     def __init__(self, contract: Union[StandardP2TR, StandardAugmentedP2TR]):
         self.contract = contract
-        self.data = None if not self.is_augm() else b'\0'*32
-
-        self.data_expanded = None  # TODO: figure out a good API for this
+        self.data: Optional[bytes] = None
+        self.data_expanded: Optional[ContractState] = None  # TODO: figure out a good API for this
 
         self.manager: ContractManager = None
 
@@ -195,7 +194,7 @@ class ContractManager:
                 raise ValueError(f"Clause {clause_name} not found")
             clause = instance.contract.clauses[clause_idx]
 
-            next_outputs = clause.next_outputs(args)
+            next_outputs = clause.next_outputs(args, instance.data_expanded)
             if isinstance(next_outputs, CTransaction):
                 if len(tx.vin) != 1 or len(next_outputs.vin) != 1:
                     raise ValueError("CTV clauses are only supported for single-input spends")  # TODO: generalize
@@ -211,9 +210,9 @@ class ContractManager:
                     if isinstance(out_contract, (P2TR, OpaqueP2TR)):
                         out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
                     elif isinstance(out_contract, AugmentedP2TR):
-                        if clause_output.next_data is None:
+                        if clause_output.next_state is None:
                             raise ValueError("Missing data for augmented output")
-                        out_scriptPubKey = out_contract.get_tr_info(clause_output.next_data).scriptPubKey
+                        out_scriptPubKey = out_contract.get_tr_info(clause_output.next_state.encode()).scriptPubKey
                     else:
                         raise ValueError("Unsupported contract type")
 
@@ -336,7 +335,7 @@ class ContractManager:
                 raise ValueError(f"Clause {instance.spending_clause} not found")
             clause = instance.contract.clauses[clause_idx]
 
-            next_outputs = clause.next_outputs(instance.spending_args)
+            next_outputs = clause.next_outputs(instance.spending_args, instance.data_expanded)
 
             # We go through all the outputs produced by spending this transaction,
             # and add them to the manager if they are standard
@@ -357,9 +356,10 @@ class ContractManager:
                     if isinstance(out_contract, (P2TR, OpaqueP2TR, StandardP2TR)):
                         continue  # nothing to do, will not track this output
                     elif isinstance(out_contract, StandardAugmentedP2TR):
-                        if clause_output.next_data is None:
+                        if clause_output.next_state is None:
                             raise ValueError("Missing data for augmented output")
-                        new_instance.data = clause_output.next_data
+                        new_instance.data = clause_output.next_state.encode()
+                        new_instance.data_expanded = clause_output.next_state
                     else:
                         raise ValueError("Unsupported contract type")
 
@@ -376,7 +376,7 @@ class ContractManager:
             self.add_instance(instance)
         return result
 
-    def fund_instance(self, contract: Union[StandardP2TR, StandardAugmentedP2TR], amount: int, data: Optional[bytes] = None) -> ContractInstance:
+    def fund_instance(self, contract: Union[StandardP2TR, StandardAugmentedP2TR], amount: int, data: Optional[ContractState] = None) -> ContractInstance:
         """
         Convenience method to create an instance of a contract, add it to the ContractManager,
         and send a transaction to fund it with a certain amount.
@@ -389,7 +389,8 @@ class ContractManager:
         if isinstance(contract, StandardAugmentedP2TR):
             if data is None:
                 raise ValueError("The data must be provided for an augmented P2TR contract instance")
-            instance.data = data
+            instance.data_expanded = data
+            instance.data = data.encode()
         self.add_instance(instance)
         txid = self.rpc.sendtoaddress(instance.get_address(), amount/100_000_000)
         self.wait_for_outpoint(instance, txid)

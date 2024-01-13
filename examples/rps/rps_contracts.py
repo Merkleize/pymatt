@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import hashlib
 
 from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY
@@ -5,9 +6,9 @@ from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.messages import sha256
 from matt.btctools import script
 from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
-from matt.contracts import P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR
-from matt.script_helpers import check_output_contract
-from matt.utils import make_ctv_template
+from matt.contracts import P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR, ContractState
+from matt.script_helpers import check_input_contract, check_output_contract
+from matt.utils import encode_wit_element, make_ctv_template
 
 DEFAULT_STAKE: int = 1000  # amount of sats that the players bet
 
@@ -71,14 +72,19 @@ class RPSGameS0(StandardP2TR):
 
                 OP_DUP, 0, 3, OP_WITHIN, OP_VERIFY,   # check that m_b is 0, 1 or 2
 
-                OP_SHA256,  # data = sha256(m_b)
+                *S1.State.encoder_script(),
                 *check_output_contract(S1, index=0),
             ]),
             arg_specs=[
                 ('m_b', IntType()),
                 ('bob_sig', SignerType(bob_pk)),
             ],
-            next_output_fn=lambda args: [ClauseOutput(n=0, next_contract=S1, next_data=sha256(bn2vch(args['m_b'])))]
+            next_outputs_fn=lambda args, _: [
+                ClauseOutput(
+                    n=0,
+                    next_contract=S1,
+                    next_state=S1.State(m_b=args["m_b"])
+                )]
         )
 
         super().__init__(NUMS_KEY, bob_move)
@@ -95,6 +101,16 @@ class RPSGameS0(StandardP2TR):
 #  - alice_pk, reveal losing move => ctv(bob wins)
 #  - alice_pk, reveal tie move => ctv(tie)
 class RPSGameS1(StandardAugmentedP2TR):
+    @dataclass
+    class State(ContractState):
+        m_b: int
+
+        def encode(self):
+            return sha256(encode_wit_element(self.m_b))
+
+        def encoder_script():
+            return CScript([OP_SHA256])
+
     def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes, stake: int):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
@@ -120,12 +136,8 @@ class RPSGameS1(StandardAugmentedP2TR):
                 OP_DUP,
                 # stack: <m_b> <m_b>              altstack: <m_a>
 
-                OP_SHA256,  # data: sha256(m_b)
-                -1,  # index: current input's index
-                0,   # NUMS pubkey
-                -1,  # taptree: current input's taptree
-                CCV_FLAG_CHECK_INPUT,  # flags
-                OP_CHECKCONTRACTVERIFY,
+                *self.State.encoder_script(),
+                *check_input_contract(),
 
                 # stack: <m_b>                    altstack: <m_a>
 
@@ -164,10 +176,10 @@ class RPSGameS1(StandardAugmentedP2TR):
             ('r_a', BytesType()),
         ]
         alice_wins = StandardClause("tie", make_script(
-            0, tmpl_alice_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_alice_wins)
+            0, tmpl_alice_wins.get_standard_template_hash(0)), arg_specs, lambda _, __: tmpl_alice_wins)
         bob_wins = StandardClause("bob_wins", make_script(
-            1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_bob_wins)
+            1, tmpl_bob_wins.get_standard_template_hash(0)), arg_specs, lambda _, __: tmpl_bob_wins)
         tie = StandardClause("alice_wins", make_script(
-            2, tmpl_tie.get_standard_template_hash(0)), arg_specs, lambda _: tmpl_tie)
+            2, tmpl_tie.get_standard_template_hash(0)), arg_specs, lambda _, __: tmpl_tie)
 
         super().__init__(NUMS_KEY, [alice_wins, [bob_wins, tie]])
