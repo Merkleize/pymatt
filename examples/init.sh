@@ -21,7 +21,7 @@ if [[ -z $NEW_ADDRESS ]]; then
     exit 1
 fi
 
-# Generate 101 blocks, sending the block reward to the new address
-$BITCOIN_CLI generatetoaddress 110 $NEW_ADDRESS
+# Generate 300 blocks, sending the block reward to the new address
+$BITCOIN_CLI generatetoaddress 300 $NEW_ADDRESS
 
-echo "Generated 101 blocks to address: $NEW_ADDRESS"
+echo "Generated 300 blocks to address: $NEW_ADDRESS"
