@@ -226,19 +226,19 @@ class Leaf(StandardAugmentedP2TR):
 class Bisect_1(StandardAugmentedP2TR):
     @dataclass
     class State(ContractState):
-        h_i: bytes
-        h_j_plus_1_a: bytes
-        h_j_plus_1_b: bytes
-        t_i_j_a: bytes
-        t_i_j_b: bytes
+        h_start: bytes
+        h_end_a: bytes
+        h_end_b: bytes
+        trace_a: bytes
+        trace_b: bytes
 
         def encode(self):
             return MerkleTree([
-                self.h_i,
-                self.h_j_plus_1_a,
-                self.h_j_plus_1_b,
-                self.t_i_j_a,
-                self.t_i_j_b
+                self.h_start,
+                self.h_end_a,
+                self.h_end_b,
+                self.trace_a,
+                self.trace_b
             ]).root
 
         def encoder_script():
@@ -302,27 +302,27 @@ class Bisect_1(StandardAugmentedP2TR):
             ]),
             arg_specs=[
                 ('alice_sig', SignerType(alice_pk)),
-                ('h_i', BytesType()),
-                ('h_j_plus_1_a', BytesType()),
-                ('h_j_plus_1_b', BytesType()),
-                ('t_i_j_a', BytesType()),
-                ('t_i_j_b', BytesType()),
-                ('h_i_plus_m_a', BytesType()),
-                ('t_left_a', BytesType()),
-                ('t_right_a', BytesType()),
+                ('h_start', BytesType()),
+                ('h_end_a', BytesType()),
+                ('h_end_b', BytesType()),
+                ('trace_a', BytesType()),
+                ('trace_b', BytesType()),
+                ('h_mid_a', BytesType()),
+                ('trace_left_a', BytesType()),
+                ('trace_right_a', BytesType()),
             ],
             next_outputs_fn=lambda args, _: [ClauseOutput(
                 n=-1,
                 next_contract=bisect_2,
                 next_state=bisect_2.State(
-                    h_i=args['h_i'],
-                    h_j_plus_1_a=args['h_j_plus_1_a'],
-                    h_j_plus_1_b=args['h_j_plus_1_b'],
-                    t_i_j_a=args['t_i_j_a'],
-                    t_i_j_b=args['t_i_j_b'],
-                    h_i_plus_m_a=args['h_i_plus_m_a'],
-                    t_left_a=args['t_left_a'],
-                    t_right_a=args['t_right_a'],
+                    h_start=args['h_start'],
+                    h_end_a=args['h_end_a'],
+                    h_end_b=args['h_end_b'],
+                    trace_a=args['trace_a'],
+                    trace_b=args['trace_b'],
+                    h_mid_a=args['h_mid_a'],
+                    trace_left_a=args['trace_left_a'],
+                    trace_right_a=args['trace_right_a'],
                 )
             )]
         )
@@ -346,25 +346,25 @@ class Bisect_1(StandardAugmentedP2TR):
 class Bisect_2(StandardAugmentedP2TR):
     @dataclass
     class State(ContractState):
-        h_i: bytes
-        h_j_plus_1_a: bytes
-        h_j_plus_1_b: bytes
-        t_i_j_a: bytes
-        t_i_j_b: bytes
-        h_i_plus_m_a: bytes
-        t_left_a: bytes
-        t_right_a: bytes
+        h_start: bytes
+        h_end_a: bytes
+        h_end_b: bytes
+        trace_a: bytes
+        trace_b: bytes
+        h_mid_a: bytes
+        trace_left_a: bytes
+        trace_right_a: bytes
 
         def encode(self):
             return MerkleTree([
-                self.h_i,
-                self.h_j_plus_1_a,
-                self.h_j_plus_1_b,
-                self.t_i_j_a,
-                self.t_i_j_b,
-                self.h_i_plus_m_a,
-                self.t_left_a,
-                self.t_right_a
+                self.h_start,
+                self.h_end_a,
+                self.h_end_b,
+                self.trace_a,
+                self.trace_b,
+                self.h_mid_a,
+                self.trace_left_a,
+                self.trace_right_a
             ]).root
 
         def encoder_script():
@@ -462,31 +462,31 @@ class Bisect_2(StandardAugmentedP2TR):
             ]),
             arg_specs=[
                 ('bob_sig', SignerType(bob_pk)),
-                ('h_i', BytesType()),
-                ('h_j_plus_1_a', BytesType()),
-                ('h_j_plus_1_b', BytesType()),
-                ('t_i_j_a', BytesType()),
-                ('t_i_j_b', BytesType()),
-                ('h_i_plus_m_a', BytesType()),
-                ('t_left_a', BytesType()),
-                ('t_right_a', BytesType()),
-                ('h_i_plus_m_b', BytesType()),
-                ('t_left_b', BytesType()),
-                ('t_right_b', BytesType()),
+                ('h_start', BytesType()),
+                ('h_end_a', BytesType()),
+                ('h_end_b', BytesType()),
+                ('trace_a', BytesType()),
+                ('trace_b', BytesType()),
+                ('h_mid_a', BytesType()),
+                ('trace_left_a', BytesType()),
+                ('trace_right_a', BytesType()),
+                ('h_mid_b', BytesType()),
+                ('trace_left_b', BytesType()),
+                ('trace_right_b', BytesType()),
             ],
             next_outputs_fn=lambda args, _: [ClauseOutput(
                 n=-1,
                 next_contract=leaf_left if are_children_leaves else bisect_1_left,
                 next_state=leaf_left.State(
-                    h_start=args['h_i'],
-                    h_end_alice=args['h_i_plus_m_a'],
-                    h_end_bob=args['h_i_plus_m_b'],
+                    h_start=args['h_start'],
+                    h_end_alice=args['h_mid_a'],
+                    h_end_bob=args['h_mid_b'],
                 ) if are_children_leaves else bisect_1_left.State(
-                    h_i=args['h_i'],
-                    h_j_plus_1_a=args['h_i_plus_m_a'],
-                    h_j_plus_1_b=args['h_i_plus_m_b'],
-                    t_i_j_a=args['t_left_a'],
-                    t_i_j_b=args['t_left_b'],
+                    h_start=args['h_start'],
+                    h_end_a=args['h_mid_a'],
+                    h_end_b=args['h_mid_b'],
+                    trace_a=args['trace_left_a'],
+                    trace_b=args['trace_left_b'],
                 )
             )]
         )
@@ -558,31 +558,31 @@ class Bisect_2(StandardAugmentedP2TR):
             ]),
             arg_specs=[
                 ('bob_sig', SignerType(bob_pk)),
-                ('h_i', BytesType()),
-                ('h_j_plus_1_a', BytesType()),
-                ('h_j_plus_1_b', BytesType()),
-                ('t_i_j_a', BytesType()),
-                ('t_i_j_b', BytesType()),
-                ('h_i_plus_m_a', BytesType()),
-                ('t_left_a', BytesType()),
-                ('t_right_a', BytesType()),
-                ('h_i_plus_m_b', BytesType()),
-                ('t_left_b', BytesType()),
-                ('t_right_b', BytesType()),
+                ('h_start', BytesType()),
+                ('h_end_a', BytesType()),
+                ('h_end_b', BytesType()),
+                ('trace_a', BytesType()),
+                ('trace_b', BytesType()),
+                ('h_mid_a', BytesType()),
+                ('trace_left_a', BytesType()),
+                ('trace_right_a', BytesType()),
+                ('h_mid_b', BytesType()),
+                ('trace_left_b', BytesType()),
+                ('trace_right_b', BytesType()),
             ],
             next_outputs_fn=lambda args, _: [ClauseOutput(
                 n=-1,
                 next_contract=leaf_right if are_children_leaves else bisect_1_right,
                 next_state=leaf_right.State(
-                    h_start=args['h_i_plus_m_a'],
-                    h_end_alice=args['h_j_plus_1_a'],
-                    h_end_bob=args['h_j_plus_1_b'],
+                    h_start=args['h_mid_a'],
+                    h_end_alice=args['h_end_a'],
+                    h_end_bob=args['h_end_b'],
                 ) if are_children_leaves else bisect_1_right.State(
-                    h_i=args['h_i_plus_m_a'],  # this is equal to h_i_plus_m_b, as it's checked in the script!
-                    h_j_plus_1_a=args['h_j_plus_1_a'],
-                    h_j_plus_1_b=args['h_j_plus_1_b'],
-                    t_i_j_a=args['t_right_a'],
-                    t_i_j_b=args['t_right_b'],
+                    h_start=args['h_mid_a'],  # this is equal to h_i_plus_m_b, as it's checked in the script!
+                    h_end_a=args['h_end_a'],
+                    h_end_b=args['h_end_b'],
+                    trace_a=args['trace_right_a'],
+                    trace_b=args['trace_right_b'],
                 )
             )]
         )

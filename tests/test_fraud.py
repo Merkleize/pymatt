@@ -158,31 +158,31 @@ def test_fraud_proof_full(manager: ContractManager):
     i, j = inst.contract.i, inst.contract.j
     m = (j - i + 1) // 2
     [inst] = inst('alice_reveal', signer=alice_signer,
-                  h_i=h_a[i],
-                  h_j_plus_1_a=h_a[j + 1],
-                  h_j_plus_1_b=h_b[j + 1],
-                  t_i_j_a=t_node_a(i, j),
-                  t_i_j_b=t_node_b(i, j),
-                  h_i_plus_m_a=h_a[i + m],
-                  t_left_a=t_node_a(i, i + m - 1),
-                  t_right_a=t_node_a(i + m, j)
+                  h_start=h_a[i],
+                  h_end_a=h_a[j + 1],
+                  h_end_b=h_b[j + 1],
+                  trace_a=t_node_a(i, j),
+                  trace_b=t_node_b(i, j),
+                  h_mid_a=h_a[i + m],
+                  trace_left_a=t_node_a(i, i + m - 1),
+                  trace_right_a=t_node_a(i + m, j)
                   )
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 0 and inst.contract.j == 7
 
     [inst] = inst('bob_reveal_right', signer=bob_signer,
-                  h_i=h_a[i],
-                  h_j_plus_1_a=h_a[j + 1],
-                  h_j_plus_1_b=h_b[j + 1],
-                  t_i_j_a=t_node_a(i, j),
-                  t_i_j_b=t_node_b(i, j),
-                  h_i_plus_m_a=h_a[i + m],
-                  t_left_a=t_node_a(i, i + m - 1),
-                  t_right_a=t_node_a(i + m, j),
-                  h_i_plus_m_b=h_b[i + m],
-                  t_left_b=t_node_b(i, i + m - 1),
-                  t_right_b=t_node_b(i + m, j),
+                  h_start=h_a[i],
+                  h_end_a=h_a[j + 1],
+                  h_end_b=h_b[j + 1],
+                  trace_a=t_node_a(i, j),
+                  trace_b=t_node_b(i, j),
+                  h_mid_a=h_a[i + m],
+                  trace_left_a=t_node_a(i, i + m - 1),
+                  trace_right_a=t_node_a(i + m, j),
+                  h_mid_b=h_b[i + m],
+                  trace_left_b=t_node_b(i, i + m - 1),
+                  trace_right_b=t_node_b(i + m, j),
                   )
 
     assert isinstance(inst.contract, Bisect_1)
@@ -192,31 +192,31 @@ def test_fraud_proof_full(manager: ContractManager):
 
     # Bisection repeats on the node covering from index 4 to index 7
     [inst] = inst('alice_reveal', signer=alice_signer,
-                  h_i=h_a[i],
-                  h_j_plus_1_a=h_a[j + 1],
-                  h_j_plus_1_b=h_b[j + 1],
-                  t_i_j_a=t_node_a(i, j),
-                  t_i_j_b=t_node_b(i, j),
-                  h_i_plus_m_a=h_a[i + m],
-                  t_left_a=t_node_a(i, i + m - 1),
-                  t_right_a=t_node_a(i + m, j)
+                  h_start=h_a[i],
+                  h_end_a=h_a[j + 1],
+                  h_end_b=h_b[j + 1],
+                  trace_a=t_node_a(i, j),
+                  trace_b=t_node_b(i, j),
+                  h_mid_a=h_a[i + m],
+                  trace_left_a=t_node_a(i, i + m - 1),
+                  trace_right_a=t_node_a(i + m, j)
                   )
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 7
 
     [inst] = inst('bob_reveal_left', signer=bob_signer,
-                  h_i=h_a[i],
-                  h_j_plus_1_a=h_a[j + 1],
-                  h_j_plus_1_b=h_b[j + 1],
-                  t_i_j_a=t_node_a(i, j),
-                  t_i_j_b=t_node_b(i, j),
-                  h_i_plus_m_a=h_a[i + m],
-                  t_left_a=t_node_a(i, i + m - 1),
-                  t_right_a=t_node_a(i + m, j),
-                  h_i_plus_m_b=h_b[i + m],
-                  t_left_b=t_node_b(i, i + m - 1),
-                  t_right_b=t_node_b(i + m, j),
+                  h_start=h_a[i],
+                  h_end_a=h_a[j + 1],
+                  h_end_b=h_b[j + 1],
+                  trace_a=t_node_a(i, j),
+                  trace_b=t_node_b(i, j),
+                  h_mid_a=h_a[i + m],
+                  trace_left_a=t_node_a(i, i + m - 1),
+                  trace_right_a=t_node_a(i + m, j),
+                  h_mid_b=h_b[i + m],
+                  trace_left_b=t_node_b(i, i + m - 1),
+                  trace_right_b=t_node_b(i + m, j),
                   )
 
     assert isinstance(inst.contract, Bisect_1)
@@ -227,31 +227,31 @@ def test_fraud_proof_full(manager: ContractManager):
     # Bisection repeats on the node covering from index 4 to index 5 (last bisection step)
 
     [inst] = inst('alice_reveal', signer=alice_signer,
-                  h_i=h_a[i],
-                  h_j_plus_1_a=h_a[j + 1],
-                  h_j_plus_1_b=h_b[j + 1],
-                  t_i_j_a=t_node_a(i, j),
-                  t_i_j_b=t_node_b(i, j),
-                  h_i_plus_m_a=h_a[i + m],
-                  t_left_a=t_node_a(i, i + m - 1),
-                  t_right_a=t_node_a(i + m, j)
+                  h_start=h_a[i],
+                  h_end_a=h_a[j + 1],
+                  h_end_b=h_b[j + 1],
+                  trace_a=t_node_a(i, j),
+                  trace_b=t_node_b(i, j),
+                  h_mid_a=h_a[i + m],
+                  trace_left_a=t_node_a(i, i + m - 1),
+                  trace_right_a=t_node_a(i + m, j)
                   )
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 5
 
     [inst] = inst('bob_reveal_right', signer=bob_signer,
-                  h_i=h_a[i],
-                  h_j_plus_1_a=h_a[j + 1],
-                  h_j_plus_1_b=h_b[j + 1],
-                  t_i_j_a=t_node_a(i, j),
-                  t_i_j_b=t_node_b(i, j),
-                  h_i_plus_m_a=h_a[i + m],
-                  t_left_a=t_node_a(i, i + m - 1),
-                  t_right_a=t_node_a(i + m, j),
-                  h_i_plus_m_b=h_b[i + m],
-                  t_left_b=t_node_b(i, i + m - 1),
-                  t_right_b=t_node_b(i + m, j),
+                  h_start=h_a[i],
+                  h_end_a=h_a[j + 1],
+                  h_end_b=h_b[j + 1],
+                  trace_a=t_node_a(i, j),
+                  trace_b=t_node_b(i, j),
+                  h_mid_a=h_a[i + m],
+                  trace_left_a=t_node_a(i, i + m - 1),
+                  trace_right_a=t_node_a(i + m, j),
+                  h_mid_b=h_b[i + m],
+                  trace_left_b=t_node_b(i, i + m - 1),
+                  trace_right_b=t_node_b(i + m, j),
                   )
 
     # We reached a leaf. Only who was doubling correctly can withdraw

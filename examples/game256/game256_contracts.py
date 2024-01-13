@@ -201,11 +201,11 @@ class G256_S2(StandardAugmentedP2TR):
                 n=-1,
                 next_contract=bisectg256_0,
                 next_state=bisectg256_0.State(
-                    h_i=sha256(encode_wit_element(args['x'])),
-                    h_j_plus_1_a=sha256(encode_wit_element(args['y'])),
-                    h_j_plus_1_b=sha256(encode_wit_element(args['z'])),
-                    t_i_j_a=args['t_a'],
-                    t_i_j_b=args['t_b'],
+                    h_start=sha256(encode_wit_element(args['x'])),
+                    h_end_a=sha256(encode_wit_element(args['y'])),
+                    h_end_b=sha256(encode_wit_element(args['z'])),
+                    trace_a=args['t_a'],
+                    trace_b=args['t_b'],
                 )
             )]
         )
