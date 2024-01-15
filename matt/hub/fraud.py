@@ -3,77 +3,77 @@
 
 """
 Definitions:
-Let a computation for a computation trace y = f(x) be
+Let the sequence of intermediate values for a computation y = f(x) with n steps be
 
     x = x_0 ==> x_1 ==> x_2 ==> ... ==> x_n = y
 
-each x_i is itself a hash of something, specific to the computation.
+The meaning of each x_i is specific to the computation.
 
-TODO: clean up these docs, they are incoherent
+We assume that n is a power of 2 for convenience (no-operation steps can be added accordingly).
 
-where n is a power of 2 for convenience. For now, assume each step is performing exactly
-the same computation, for example: double the previous element.
+We define the hashed state h_i = H(x_i) for each i in 0, ..., n. where H is the sha256 hash of x.
 
-We know define h_i = H(x_i) for each i in 0, ..., n.
+(more generally, if the state x itself is composed of multiple values, h_i should be a commitment to
+the entire state, for example via a Merkle tree).
 
-We define the trace leaves to be:
-   H(h_0||h_1), H(h_1||h_2), ...
-that is, a commitment to the state before the computation, and the state after.
-
-Formally, let h_i = H(h_i || h_{i+1}) for i = 0, ..., n - 1.
-
-From there, we can define the aggregate trace commitment for any pair i, j with i < j where j - i + 1 is a power of two:
-
-Similarly, for any pair i, j such that j - i + 1 == 2^t >= 2
-    h_{i, j} = H(x_i||x_{j+1}||h_{i, i+m-1}||h_{i+m, j}) where m = (j - i + 1)/2
-
-We call h_{i, j; a} the value of h_{i, j} according to Alice, and h_{i, j; b} the value according to Bob.
-
-That is, each aggregate trace commitment commits to:
-  - the computation state before the leftmost leaf in the subtree is executed
-  - the computation state after the rightmost leaf in the subtree is executed
-  - the aggregate computation trace root for the left half
-  - the aggregate computation trace root for the right half
-
-
-Each internal node of the corresponds to a pair i, j with i < j, and such that j - i + 1 is a power of 2.
-The "partial trace" of its node represents a computation with intermediate values
-    x_i, x_{i + 1}, ..., x_j
-
-We define the hashed state:
-    h_i = sha256(x_i)     for any 0 <= i <= n
-
-Since Alice and Bob disagree on the hashed states, we call h_{i; a} and h_{i; b} Alice's and Bob's claimed states, respectively.
-    
-For each 0 <= i <= j < n such that m = (j - i + 1)/2 is integer, we define the computation trace t_{i, j} as follows:
+For any (i, j) such that 0 <= i <= j < n and such that j - i + 1 is a power of 2, we define the trace t_{i, j} as follows:
 
             // sha256(h_i || h_{i+1})                                       if i == j
 t_{i, j} = { 
             \\ sha256(h_i || h_{i+1} || t_{i, i + m - 1} || t_{i + m, j})   otherwise
 
-Since Alice and Bob disagree on the trace, we call t_{i, j; a} and t_{i, j; a} the traces claimed by Alice and Bob, respectively.
+where m = (j - i + 1) / 2, and || represents the concatenation.
+            
+That is: if i == j, then the trace represents a single computational step, and it commits to just the state before,
+and the state after the execution of the computational step. If i < j, then the trace represents commits to:
+- the state before the i-th computational step
+- the state after the j-th computational step
+- the sub-trace of the first half of the computation (from i to i + m - 1)
+- the sub-trace of the second half of the computation (from i + m to j)
 
-The entry state for an internal node of the bisection protocol contains the following info:
+Clearly, t_{0, n - 1} is the trace of the entire computationm, and it defines a corresponding Merkle tree.
 
-- The state h_i at the beginning of the computation (invariant: both parties agree)
-- The state x_{j; a} at the end of the computation, according to Alice
-- The state x_{j; b} at the end of the computation, according to Bob
-- The root t_{i, j; a} of the computation trace in the subtree, according to Alice
-- The root t_{i, j; b} of the computation trace in the subtree, according to Bob
+The bisection protocol is an interactive protocol between two parties Alice and Bob, who disagree on the final result
+y of the computation (but they agree on the initial state x = x_0).
+Therefore:
+- Alice claims the hashed states to be [h_{0; a}, h_{1; a}, ... h_{n; a}]
+- Bob claims the hashed states to be [h_{0; b}, h_{1; b}, ... h_{n; b}]
+where h_{0; a} = h_{0; b} = h_0, since they agree on the initial state x.
 
-All the bisection contracts have a forfait condition in case the other party doesn't participate; omitted for simplicity.
 
+The protocol starts at the "root" of the trace, that is, an internal node that represents t_{0, n-1}.
+The protocol guarantees the following invariant:
 
-IF i < j, it's an internal node.
-In the following, n := j - i + 1, and m = n/2. Therefore:
-    The left  child of t_{i, j} is t_{i, i + m - 1}
-    The right child of t_{i, j} is t_{i + m, j}
+  Bisection invariant:
+    For any node (i, j) reached in the protocol, h_{i; a} = h_{i; a}, while h_{j; a} != h_{j; b}.
 
+That is, Alice and Bob agree on the state at the beginning of the computation represented by the sub-trace, but disagree
+on the final state of the computation.
+Let's call t_{i, j; a} (resp. t_{i, j; b}) the value of the sub-trace t_{i; j} according to Alice (resp. Bob).
+
+Each bisection step of the protocol requires two transitions:
+- Alice reveals the value that define the commitment t_{i, j; a}, including the mid-state h_{i + m; a}
+- Bob then does the same; if h_{i + m; a} != h_{i + m; b}, then the protocol repeats on the left child
+  (first half of the computation, from i to i + m - 1). Otherwise, h_{i + m; a} = h_{i + m; b}, and the
+  protocol repeats on the right child (second half of the computation, from i + m to j).
+
+Once a leaf (l, l) is reached, a single computational step is part of the commitment:
+- Both parties agree that the initial hashed state is h_l
+- Alice claims the final hashed state is h_{l + 1; a}
+- Bob claims the final hashed state is h_{l + 1; b}
+
+Clearly, only the honest party can exibit the value of x_l, and the contract can adjudicate this part as the winner.
+
+Summing up, the following specs define the two contracts Bisect_1 (Alice's turn) and Bisect_2 (Bob's turn), and the
+final Leaf contract.
+
+(Alice's turn)
 Bisect_1(alice_pk, bob_pk, i, j)[h_i, h_{j+1; a}, h_{j+1; b}, t_{i, j; a}, t_{i, j; b}]
     - Alice: reveals h_{i+m; a}, t_{i, i+m-1; a}, t_{i+m, j; a}
             (the scripts checks the equation for t_{i, j; a}
         ==> Bisect_2(*)[*, h_{i+m; a}, t_{i, i+m-1; a}, t_{i+m, j; a}]
 
+(Bob's turn)
 Bisect_2(alice_pk, bob_pk, i, j)[h_i, h_{j+1; a}, h_{j+1; b}, t_{i, j; a}, t_{i, j; b}, h_{i+m; a}, t_{i, i+m-1; a}, t_{i+m, j; a}]
     - Bob: reveals h_{i+m; b}, t_{i, i+m-1; b}, t_{i+m, j; b} such that h_{i+m; a} != h_{i+m; b}   # disagree on the left child
             (the scripts checks the equation for t_{i, j; b}
@@ -82,12 +82,19 @@ Bisect_2(alice_pk, bob_pk, i, j)[h_i, h_{j+1; a}, h_{j+1; b}, t_{i, j; a}, t_{i,
             (the scripts checks the equation for t_{i, j; b}
         ==> Bisect_1(alice_pk, bob_pk, i+m, j)[x_{i+m}, x_{j+1; a}, x_{j+1; b}, h_{i+m, j; a}, h_{i+m, j; b}]
 
-IF i == j, it's a leaf.
+Both the contract also have a 'forfait' condition that allows the other party to win the challenge,
+in case the party who holds the turn refuses to comply.
+        
+IF i == j, it's a Leaf, representing the i_th computational step
 
 Leaf(alice_pk, bob_pk)[h_start, h_{end; a}, h_{end; b}]
-    - Alice: reveal x_start, take the money if h_{end; a} is the hash of f(x_start)
-    - Bob: reveal x_start, take the money if h_{end; b} is the hash of f(x_start)
+    - Alice: reveal x_start such that h_start = H(x_start); take the money if h_{end; a} is the hash of the execution of the i-th step on x_start
+    - Bob: reveal reveal x_start such that h_start = H(x_start); take the money if h_{end; b} is the hash of the execution of the i-th step on x_start
 
+
+
+Omitted from this description and implementation: committing a bond, and slashing part of it in case of a loss (awarding only part of it to the winner).
+    
 """
 
 

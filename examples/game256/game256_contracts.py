@@ -8,14 +8,16 @@ from matt.btctools.script import OP_ADD, OP_CHECKSIG, OP_DUP, OP_EQUAL, OP_FROMA
 from matt.contracts import ClauseOutput, StandardClause, StandardAugmentedP2TR, StandardP2TR, ContractState
 from matt.hub.fraud import Bisect_1, Computer, Leaf
 from matt.merkle import MerkleTree
-from matt.script_helpers import check_input_contract, check_output_contract, drop, dup, merkle_root, older
+from matt.script_helpers import check_input_contract, check_output_contract, dup, merkle_root, older
 from matt.utils import encode_wit_element
 
+# Note: for simplicity, this contract does not yet implement bonds, nor slashing part of it after the fraud proof protocol.
 
 # TODO: add forfait clauses whenever needed
 
 # TODO: how to generalize what the contract does after the leaf? We should be able to compose clauses with some external code.
 #       Do we need "clause" algebra?
+
 
 class G256_S0(StandardP2TR):
     def __init__(self, alice_pk: bytes, bob_pk: bytes, forfait_timeout: int = 10):
