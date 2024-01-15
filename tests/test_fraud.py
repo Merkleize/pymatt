@@ -4,9 +4,9 @@ from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
 from matt.hub.fraud import Bisect_1, Bisect_2, Leaf
 from matt.manager import ContractManager, SchnorrSigner
-from matt.merkle import MerkleTree, is_power_of_2
+from matt.merkle import is_power_of_2
 from matt.btctools import key
-from matt.utils import encode_wit_element
+from matt.utils import encode_wit_element, format_tx_markdown
 
 
 AMOUNT = 20_000
@@ -78,7 +78,7 @@ def test_leaf_reveal_bob(manager: ContractManager):
     assert len(out_instances) == 0
 
 
-def test_fraud_proof_full(manager: ContractManager):
+def test_fraud_proof_full(manager: ContractManager, report):
     alice_trace = [2, 4, 8, 16, 32, 64, 127, 254, 508]
     bob_trace = [2, 4, 8, 16, 32, 64, 128, 256, 512]
 
@@ -167,6 +167,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   trace_left_a=t_node_a(i, i + m - 1),
                   trace_right_a=t_node_a(i + m, j)
                   )
+    report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Alice)"))
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 0 and inst.contract.j == 7
@@ -184,6 +185,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   trace_left_b=t_node_b(i, i + m - 1),
                   trace_right_b=t_node_b(i + m, j),
                   )
+    report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Bob, right child)"))
 
     assert isinstance(inst.contract, Bisect_1)
     i, j = inst.contract.i, inst.contract.j
@@ -201,6 +203,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   trace_left_a=t_node_a(i, i + m - 1),
                   trace_right_a=t_node_a(i + m, j)
                   )
+    report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Alice)"))
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 7
@@ -218,6 +221,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   trace_left_b=t_node_b(i, i + m - 1),
                   trace_right_b=t_node_b(i + m, j),
                   )
+    report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Bob, left child)"))
 
     assert isinstance(inst.contract, Bisect_1)
     i, j = inst.contract.i, inst.contract.j
@@ -236,6 +240,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   trace_left_a=t_node_a(i, i + m - 1),
                   trace_right_a=t_node_a(i + m, j)
                   )
+    report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Alice)"))
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 5
@@ -253,6 +258,7 @@ def test_fraud_proof_full(manager: ContractManager):
                   trace_left_b=t_node_b(i, i + m - 1),
                   trace_right_b=t_node_b(i + m, j),
                   )
+    report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Bob, right child)"))
 
     # We reached a leaf. Only who was doubling correctly can withdraw
 
@@ -273,3 +279,5 @@ def test_fraud_proof_full(manager: ContractManager):
                          h_y_a=h_a[6])
 
     assert len(out_instances) == 0
+
+    report.write("Fraud proof", format_tx_markdown(inst.spending_tx, "Leaf reveal"))
