@@ -155,9 +155,10 @@ def execute_command(input_line: str):
             )
             )
 
-        R_inst("withdraw",
-               outputs=outputs,
-               merkle_root=mt.root, merkle_proof=mt.prove_leaf(leaf_index))
+        R_inst("withdraw", outputs=outputs)(
+            merkle_root=mt.root,
+            merkle_proof=mt.prove_leaf(leaf_index)
+        )
 
         print("Done")
     elif action == "write":
@@ -174,11 +175,11 @@ def execute_command(input_line: str):
         if leaf_index not in range(len(R_inst.data_expanded)):
             raise ValueError("Invalid leaf index")
 
-        result = R_inst("write",
-                        merkle_root=mt.root,
-                        new_value=new_value,
-                        merkle_proof=mt.prove_leaf(leaf_index)
-                        )
+        result = R_inst("write")(
+            merkle_root=mt.root,
+            new_value=new_value,
+            merkle_proof=mt.prove_leaf(leaf_index)
+        )
 
         assert len(result) == 1
 

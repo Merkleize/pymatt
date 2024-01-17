@@ -53,7 +53,7 @@ def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report
 
     V_inst = manager.fund_instance(vault_contract, amount)
 
-    out_instances = V_inst("recover", out_i=0)
+    out_instances = V_inst("recover")(out_i=0)
 
     out: CTxOut = V_inst.spending_tx.vout[0]
 
@@ -69,8 +69,6 @@ def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report
 def test_vault_trigger_and_recover(vault_specs: VaultSpecs, manager: ContractManager, report):
     vault_description, vault_contract = vault_specs
 
-    signer = SchnorrSigner(unvault_priv_key)
-
     amount = 4999990000
 
     V_inst = manager.fund_instance(vault_contract, amount)
@@ -81,12 +79,14 @@ def test_vault_trigger_and_recover(vault_specs: VaultSpecs, manager: ContractMan
         ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 4999990000),
     ], nSequence=locktime)
 
-    [U_inst] = V_inst("trigger", signer=signer,
-                      out_i=0, ctv_hash=ctv_tmpl.get_standard_template_hash(0))
+    [U_inst] = V_inst("trigger", signer=SchnorrSigner(unvault_priv_key))(
+        out_i=0,
+        ctv_hash=ctv_tmpl.get_standard_template_hash(0)
+    )
 
     report.write(vault_description, format_tx_markdown(V_inst.spending_tx, "Trigger"))
 
-    out_instances = U_inst("recover", out_i=0)
+    out_instances = U_inst("recover")(out_i=0)
 
     assert len(out_instances) == 0
 
@@ -109,8 +109,10 @@ def test_vault_trigger_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServicePro
         ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 1666663334),
     ], nSequence=locktime)
 
-    [U_inst] = V_inst("trigger", signer=signer,
-                      out_i=0, ctv_hash=ctv_tmpl.get_standard_template_hash(0))
+    [U_inst] = V_inst("trigger", signer=signer)(
+        out_i=0,
+        ctv_hash=ctv_tmpl.get_standard_template_hash(0)
+    )
 
     spend_tx, _ = manager.get_spend_tx(
         (U_inst, "withdraw", {"ctv_hash": ctv_tmpl.get_standard_template_hash(0)})

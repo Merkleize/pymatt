@@ -39,15 +39,15 @@ def test_rps(manager: ContractManager):
     # Bob's move
     m_b = moves["paper"]
 
-    [S1_inst] = S0_inst("bob_move", signer=bob_signer, m_b=m_b)
+    [S1_inst] = S0_inst("bob_move", bob_signer)(m_b=m_b)
 
     # cheating attempt
     with pytest.raises(JSONRPCException, match='Script failed an OP_EQUALVERIFY operation'):
-        S1_inst("alice_wins", m_a=m_a, m_b=m_b, r_a=r_a)
+        S1_inst("alice_wins")(m_a=m_a, m_b=m_b, r_a=r_a)
 
     # cheat a bit less
     with pytest.raises(JSONRPCException, match='Script failed an OP_EQUALVERIFY operation'):
-        S1_inst("tie", m_a=m_a, m_b=m_b, r_a=r_a)
+        S1_inst("tie")(m_a=m_a, m_b=m_b, r_a=r_a)
 
     # correct adjudication
-    S1_inst("bob_wins", m_a=m_a, m_b=m_b, r_a=r_a)
+    S1_inst("bob_wins")(m_a=m_a, m_b=m_b, r_a=r_a)

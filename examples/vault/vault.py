@@ -248,7 +248,7 @@ def execute_command(input_line: str):
         if not isinstance(instance.contract, (Vault, Unvaulting)):
             raise ValueError("Only Vault or Unvaulting instances can be recovered")
 
-        instance("recover", out_i=0)
+        instance("recover")(out_i=0)
 
     elif action == "withdraw":
         item_idx = int(args_dict["item"])

@@ -6,7 +6,7 @@
 # There are no bad people here, though, so we keep it simple for now.
 from enum import Enum
 from io import BytesIO
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from .argtypes import SignerType
 from .btctools import script
@@ -102,14 +102,17 @@ class ContractInstance:
             value = self.funding_tx.vout[self.outpoint.n].nValue
         return f"{self.__class__.__name__}(contract={self.contract}, data={self.data if self.data is None else self.data.hex()}, value={value}, status={self.status}, outpoint={self.outpoint})"
 
-    def __call__(self, clause_name: str, *, signer: Optional[SchnorrSigner] = None, outputs: List[CTxOut] = [], **kwargs) -> List['ContractInstance']:
-        if self.manager is None:
-            raise ValueError("Direct invocation is only allowed after adding the instance to a ContractManager")
+    def __call__(self, clause_name: str, signer: Optional[SchnorrSigner] = None, outputs: List[CTxOut] = []) -> Callable[..., List['ContractInstance']]:
+        def callable_instance(**kwargs) -> List['ContractInstance']:
+            if self.manager is None:
+                raise ValueError("Direct invocation is only allowed after adding the instance to a ContractManager")
 
-        if self.status != ContractInstanceStatus.FUNDED:
-            raise ValueError("Only implemented for FUNDED instances")
+            if self.status != ContractInstanceStatus.FUNDED:
+                raise ValueError("Only implemented for FUNDED instances")
 
-        return self.manager.spend_instance(self, clause_name, kwargs, signer=signer, outputs=outputs)
+            return self.manager.spend_instance(self, clause_name, kwargs, signer=signer, outputs=outputs)
+
+        return callable_instance
 
 
 class ContractManager:
