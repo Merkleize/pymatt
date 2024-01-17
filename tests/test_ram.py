@@ -9,7 +9,7 @@ from matt.merkle import MerkleTree
 AMOUNT = 20_000
 
 
-def test_withdraw(rpc, manager: ContractManager):
+def test_withdraw(manager: ContractManager):
     # tests the "withdraw" clause, that allows spending anywhere as long
     # as a valid Merkle proof is provided
     for size in [8, 16]:
@@ -27,11 +27,10 @@ def test_withdraw(rpc, manager: ContractManager):
                 )
             ]
 
-            out_instances = R_inst("withdraw",
-                                   outputs=outputs,
-                                   merkle_root=mt.root,
-                                   merkle_proof=mt.prove_leaf(leaf_index)
-                                   )
+            out_instances = R_inst("withdraw", outputs=outputs)(
+                merkle_root=mt.root,
+                merkle_proof=mt.prove_leaf(leaf_index)
+            )
 
             assert len(out_instances) == 0
 
@@ -48,11 +47,11 @@ def test_write(manager: ContractManager):
     R = RAM(len(data))
     R_inst = manager.fund_instance(R, AMOUNT, data=R.State(data))
 
-    out_instances = R_inst("write",
-                           merkle_root=mt.root,
-                           new_value=new_value,
-                           merkle_proof=mt.prove_leaf(leaf_index)
-                           )
+    out_instances = R_inst("write")(
+        merkle_root=mt.root,
+        new_value=new_value,
+        merkle_proof=mt.prove_leaf(leaf_index)
+    )
 
     assert len(out_instances) == 1
 
@@ -77,11 +76,11 @@ def test_write_loop(manager: ContractManager):
         leaf_index = i % size
         new_value = sha256((100 + i).to_bytes(1, byteorder='little'))
 
-        out_instances = R_inst("write",
-                               merkle_root=MerkleTree(data).root,
-                               new_value=new_value,
-                               merkle_proof=MerkleTree(data).prove_leaf(leaf_index)
-                               )
+        out_instances = R_inst("write")(
+            merkle_root=MerkleTree(data).root,
+            new_value=new_value,
+            merkle_proof=MerkleTree(data).prove_leaf(leaf_index)
+        )
 
         assert len(out_instances) == 1
 

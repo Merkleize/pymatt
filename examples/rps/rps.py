@@ -128,7 +128,7 @@ class AliceGame:
         print(f"Game result: {outcome}")
 
         self.env.prompt("Broadcasting adjudication transaction")
-        C2(outcome, m_a=m_a, m_b=m_b, r_a=r_a)
+        C2(outcome)(m_a=m_a, m_b=m_b, r_a=r_a)
 
         s.close()
 
@@ -178,7 +178,7 @@ class BobGame:
 
         self.env.prompt("Broadcasting Bob's move transaction")
 
-        [C2] = C("bob_move", signer=SchnorrSigner(self.priv_key), m_b=m_b)
+        [C2] = C("bob_move", SchnorrSigner(self.priv_key))(m_b=m_b)
 
         txid = C.spending_tx.hash
         print(f"Bob's move broadcasted: {m_b}. txid: {txid}")

@@ -39,11 +39,10 @@ def test_leaf_reveal_alice(manager: ContractManager):
         )
     ]
 
-    out_instances = L_inst("alice_reveal",
-                           signer=SchnorrSigner(alice_key),
-                           outputs=outputs,
-                           x=x_start,
-                           h_y_b=h_end_bob)
+    out_instances = L_inst("alice_reveal", SchnorrSigner(alice_key), outputs)(
+        x=x_start,
+        h_y_b=h_end_bob
+    )
 
     assert len(out_instances) == 0
 
@@ -69,11 +68,10 @@ def test_leaf_reveal_bob(manager: ContractManager):
         )
     ]
 
-    out_instances = L_inst("bob_reveal",
-                           signer=SchnorrSigner(bob_key),
-                           outputs=outputs,
-                           x=x_start,
-                           h_y_a=h_end_alice)
+    out_instances = L_inst("bob_reveal", SchnorrSigner(bob_key), outputs)(
+        x=x_start,
+        h_y_a=h_end_alice
+    )
 
     assert len(out_instances) == 0
 
@@ -126,7 +124,7 @@ def test_fraud_proof_full(manager: ContractManager, report):
     inst = manager.fund_instance(G, AMOUNT)
 
     # Bob chooses its input
-    [inst] = inst('choose', signer=bob_signer, x=x)
+    [inst] = inst('choose', bob_signer)(x=x)
 
     assert isinstance(inst.contract, G256_S1)
     assert isinstance(inst.data_expanded, G256_S1.State) and inst.data_expanded.x == x
@@ -135,21 +133,19 @@ def test_fraud_proof_full(manager: ContractManager, report):
     t_b = t_node_b(0, n - 1)  # trace root according to Bob
 
     # Alice reveals her answer
-    [inst] = inst('reveal', signer=alice_signer,
-                  x=x,
-                  y=y,
-                  t_a=t_a)
+    [inst] = inst('reveal', alice_signer)(x=x, y=y, t_a=t_a)
 
     assert isinstance(inst.contract, G256_S2)
     assert inst.data_expanded == G256_S2.State(t_a=t_a, x=x, y=y)
 
     # Bob disagrees and starts the challenge
-    [inst] = inst('start_challenge', signer=bob_signer,
-                  t_a=t_a,
-                  x=x,
-                  y=y,
-                  z=z,
-                  t_b=t_b)
+    [inst] = inst('start_challenge', bob_signer)(
+        t_a=t_a,
+        x=x,
+        y=y,
+        z=z,
+        t_b=t_b
+    )
 
     # inst now represents a step in the bisection protocol corresponding to the root of the computation
 
@@ -157,34 +153,34 @@ def test_fraud_proof_full(manager: ContractManager, report):
     assert inst.contract.i == 0 and inst.contract.j == 7
     i, j = inst.contract.i, inst.contract.j
     m = (j - i + 1) // 2
-    [inst] = inst('alice_reveal', signer=alice_signer,
-                  h_start=h_a[i],
-                  h_end_a=h_a[j + 1],
-                  h_end_b=h_b[j + 1],
-                  trace_a=t_node_a(i, j),
-                  trace_b=t_node_b(i, j),
-                  h_mid_a=h_a[i + m],
-                  trace_left_a=t_node_a(i, i + m - 1),
-                  trace_right_a=t_node_a(i + m, j)
-                  )
+    [inst] = inst('alice_reveal', alice_signer)(
+        h_start=h_a[i],
+        h_end_a=h_a[j + 1],
+        h_end_b=h_b[j + 1],
+        trace_a=t_node_a(i, j),
+        trace_b=t_node_b(i, j),
+        h_mid_a=h_a[i + m],
+        trace_left_a=t_node_a(i, i + m - 1),
+        trace_right_a=t_node_a(i + m, j)
+    )
     report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Alice)"))
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 0 and inst.contract.j == 7
 
-    [inst] = inst('bob_reveal_right', signer=bob_signer,
-                  h_start=h_a[i],
-                  h_end_a=h_a[j + 1],
-                  h_end_b=h_b[j + 1],
-                  trace_a=t_node_a(i, j),
-                  trace_b=t_node_b(i, j),
-                  h_mid_a=h_a[i + m],
-                  trace_left_a=t_node_a(i, i + m - 1),
-                  trace_right_a=t_node_a(i + m, j),
-                  h_mid_b=h_b[i + m],
-                  trace_left_b=t_node_b(i, i + m - 1),
-                  trace_right_b=t_node_b(i + m, j),
-                  )
+    [inst] = inst('bob_reveal_right', bob_signer)(
+        h_start=h_a[i],
+        h_end_a=h_a[j + 1],
+        h_end_b=h_b[j + 1],
+        trace_a=t_node_a(i, j),
+        trace_b=t_node_b(i, j),
+        h_mid_a=h_a[i + m],
+        trace_left_a=t_node_a(i, i + m - 1),
+        trace_right_a=t_node_a(i + m, j),
+        h_mid_b=h_b[i + m],
+        trace_left_b=t_node_b(i, i + m - 1),
+        trace_right_b=t_node_b(i + m, j),
+    )
     report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Bob, right child)"))
 
     assert isinstance(inst.contract, Bisect_1)
@@ -193,34 +189,34 @@ def test_fraud_proof_full(manager: ContractManager, report):
     assert i == 4 and j == 7
 
     # Bisection repeats on the node covering from index 4 to index 7
-    [inst] = inst('alice_reveal', signer=alice_signer,
-                  h_start=h_a[i],
-                  h_end_a=h_a[j + 1],
-                  h_end_b=h_b[j + 1],
-                  trace_a=t_node_a(i, j),
-                  trace_b=t_node_b(i, j),
-                  h_mid_a=h_a[i + m],
-                  trace_left_a=t_node_a(i, i + m - 1),
-                  trace_right_a=t_node_a(i + m, j)
-                  )
+    [inst] = inst('alice_reveal', alice_signer)(
+        h_start=h_a[i],
+        h_end_a=h_a[j + 1],
+        h_end_b=h_b[j + 1],
+        trace_a=t_node_a(i, j),
+        trace_b=t_node_b(i, j),
+        h_mid_a=h_a[i + m],
+        trace_left_a=t_node_a(i, i + m - 1),
+        trace_right_a=t_node_a(i + m, j)
+    )
     report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Alice)"))
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 7
 
-    [inst] = inst('bob_reveal_left', signer=bob_signer,
-                  h_start=h_a[i],
-                  h_end_a=h_a[j + 1],
-                  h_end_b=h_b[j + 1],
-                  trace_a=t_node_a(i, j),
-                  trace_b=t_node_b(i, j),
-                  h_mid_a=h_a[i + m],
-                  trace_left_a=t_node_a(i, i + m - 1),
-                  trace_right_a=t_node_a(i + m, j),
-                  h_mid_b=h_b[i + m],
-                  trace_left_b=t_node_b(i, i + m - 1),
-                  trace_right_b=t_node_b(i + m, j),
-                  )
+    [inst] = inst('bob_reveal_left', bob_signer)(
+        h_start=h_a[i],
+        h_end_a=h_a[j + 1],
+        h_end_b=h_b[j + 1],
+        trace_a=t_node_a(i, j),
+        trace_b=t_node_b(i, j),
+        h_mid_a=h_a[i + m],
+        trace_left_a=t_node_a(i, i + m - 1),
+        trace_right_a=t_node_a(i + m, j),
+        h_mid_b=h_b[i + m],
+        trace_left_b=t_node_b(i, i + m - 1),
+        trace_right_b=t_node_b(i + m, j),
+    )
     report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Bob, left child)"))
 
     assert isinstance(inst.contract, Bisect_1)
@@ -230,34 +226,34 @@ def test_fraud_proof_full(manager: ContractManager, report):
 
     # Bisection repeats on the node covering from index 4 to index 5 (last bisection step)
 
-    [inst] = inst('alice_reveal', signer=alice_signer,
-                  h_start=h_a[i],
-                  h_end_a=h_a[j + 1],
-                  h_end_b=h_b[j + 1],
-                  trace_a=t_node_a(i, j),
-                  trace_b=t_node_b(i, j),
-                  h_mid_a=h_a[i + m],
-                  trace_left_a=t_node_a(i, i + m - 1),
-                  trace_right_a=t_node_a(i + m, j)
-                  )
+    [inst] = inst('alice_reveal', alice_signer)(
+        h_start=h_a[i],
+        h_end_a=h_a[j + 1],
+        h_end_b=h_b[j + 1],
+        trace_a=t_node_a(i, j),
+        trace_b=t_node_b(i, j),
+        h_mid_a=h_a[i + m],
+        trace_left_a=t_node_a(i, i + m - 1),
+        trace_right_a=t_node_a(i + m, j)
+    )
     report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Alice)"))
 
     assert isinstance(inst.contract, Bisect_2)
     assert inst.contract.i == 4 and inst.contract.j == 5
 
-    [inst] = inst('bob_reveal_right', signer=bob_signer,
-                  h_start=h_a[i],
-                  h_end_a=h_a[j + 1],
-                  h_end_b=h_b[j + 1],
-                  trace_a=t_node_a(i, j),
-                  trace_b=t_node_b(i, j),
-                  h_mid_a=h_a[i + m],
-                  trace_left_a=t_node_a(i, i + m - 1),
-                  trace_right_a=t_node_a(i + m, j),
-                  h_mid_b=h_b[i + m],
-                  trace_left_b=t_node_b(i, i + m - 1),
-                  trace_right_b=t_node_b(i + m, j),
-                  )
+    [inst] = inst('bob_reveal_right', bob_signer)(
+        h_start=h_a[i],
+        h_end_a=h_a[j + 1],
+        h_end_b=h_b[j + 1],
+        trace_a=t_node_a(i, j),
+        trace_b=t_node_b(i, j),
+        h_mid_a=h_a[i + m],
+        trace_left_a=t_node_a(i, i + m - 1),
+        trace_right_a=t_node_a(i + m, j),
+        h_mid_b=h_b[i + m],
+        trace_left_b=t_node_b(i, i + m - 1),
+        trace_right_b=t_node_b(i + m, j),
+    )
     report.write("Fraud proof", format_tx_markdown(inst.funding_tx, "Bisection (Bob, right child)"))
 
     # We reached a leaf. Only who was doubling correctly can withdraw
@@ -272,11 +268,10 @@ def test_fraud_proof_full(manager: ContractManager, report):
             scriptPubKey=bytes([0, 0x20, *[0x42]*32])
         )
     ]
-    out_instances = inst("bob_reveal",
-                         signer=SchnorrSigner(bob_key),
-                         outputs=outputs,
-                         x=bob_trace[5],
-                         h_y_a=h_a[6])
+    out_instances = inst("bob_reveal", bob_signer, outputs)(
+        x=bob_trace[5],
+        h_y_a=h_a[6]
+    )
 
     assert len(out_instances) == 0
 
