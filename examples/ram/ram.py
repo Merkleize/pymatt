@@ -190,7 +190,8 @@ def execute_command(input_line: str):
         amount = int(args_dict["amount"])
         content = [sha256(i.to_bytes(1, byteorder='little')) for i in range(8)]
 
-        R_inst = manager.fund_instance(RAM(len(content)), amount, data=MerkleTree(content).root)
+        R = RAM(len(content))
+        R_inst = manager.fund_instance(R, amount, data=R.State(content))
 
         R_inst.data_expanded = content
 
