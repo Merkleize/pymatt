@@ -1,4 +1,4 @@
-fund amount=4999990000
+fund amount=49999900
 
 recover item=0
 

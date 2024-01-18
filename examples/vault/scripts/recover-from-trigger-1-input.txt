@@ -1,6 +1,6 @@
-fund amount=4999990000
+fund amount=49999900
 
-trigger items="[0]" outputs="[\"bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437:4999990000\"]"
+trigger items="[0]" outputs="[\"bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437:49999900\"]"
 
 # make sure the timelock expires
 mine 10

@@ -1,6 +1,6 @@
-fund amount=4999990000
+fund amount=49999900
 
-trigger items="[0]" outputs="[\"bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437:1666663333\",\"bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83:1666663333\",\"bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46:1666663334\"]"
+trigger items="[0]" outputs="[\"bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437:1666663333\",\"bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83:1666663333\",\"bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46:16663334\"]"
 
 # make sure the timelock expires
 mine 10

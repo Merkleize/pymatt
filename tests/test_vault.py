@@ -69,14 +69,14 @@ def test_vault_recover(vault_specs: VaultSpecs, manager: ContractManager, report
 def test_vault_trigger_and_recover(vault_specs: VaultSpecs, manager: ContractManager, report):
     vault_description, vault_contract = vault_specs
 
-    amount = 4999990000
+    amount = 49999900
 
     V_inst = manager.fund_instance(vault_contract, amount)
 
     ctv_tmpl = make_ctv_template([
-        ("bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437", 4999990000),
-        ("bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83", 4999990000),
-        ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 4999990000),
+        ("bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437", 49999900),
+        ("bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83", 49999900),
+        ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 49999900),
     ], nSequence=locktime)
 
     [U_inst] = V_inst("trigger", signer=SchnorrSigner(unvault_priv_key))(
@@ -99,14 +99,14 @@ def test_vault_trigger_and_withdraw(vault_specs: VaultSpecs, rpc: AuthServicePro
 
     signer = SchnorrSigner(unvault_priv_key)
 
-    amount = 4999990000
+    amount = 49999900
 
     V_inst = manager.fund_instance(vault_contract, amount)
 
     ctv_tmpl = make_ctv_template([
-        ("bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437", 1666663333),
-        ("bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83", 1666663333),
-        ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 1666663334),
+        ("bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437", 16663333),
+        ("bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83", 16663333),
+        ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 16663334),
     ], nSequence=locktime)
 
     [U_inst] = V_inst("trigger", signer=signer)(
@@ -149,16 +149,16 @@ def test_vault_trigger_with_revault_and_withdraw(vault_specs: VaultSpecs, rpc: A
 
     vault_description, vault_contract = vault_specs
 
-    amount = 4999990000
+    amount = 49999900
 
     V_inst_1 = manager.fund_instance(vault_contract, amount)
     V_inst_2 = manager.fund_instance(vault_contract, amount)
     V_inst_3 = manager.fund_instance(vault_contract, amount)
 
     ctv_tmpl = make_ctv_template([
-        ("bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437", 4999990000),
-        ("bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83", 4999990000),
-        ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 2999990000),
+        ("bcrt1qqy0kdmv0ckna90ap6efd6z39wcdtpfa3a27437", 49999900),
+        ("bcrt1qpnpjyzkfe7n5eppp2ktwpvuxfw5qfn2zjdum83", 49999900),
+        ("bcrt1q6vqduw24yjjll6nfkxlfy2twwt52w58tnvnd46", 29999900),
     ], nSequence=locktime)
     ctv_hash = ctv_tmpl.get_standard_template_hash(nIn=0)
 
