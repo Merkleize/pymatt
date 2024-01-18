@@ -2,6 +2,7 @@ from examples.game256.game256_contracts import G256_S0, G256_S1, G256_S2, Comput
 
 from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
+from matt.contracts import P2TR
 from matt.hub.fraud import Bisect_1, Bisect_2, Leaf
 from matt.manager import ContractManager, SchnorrSigner
 from matt.merkle import is_power_of_2
@@ -14,8 +15,6 @@ alice_key = key.ExtendedKey.deserialize(
     "tprv8ZgxMBicQKsPdpwA4vW8DcSdXzPn7GkS2RdziGXUX8k86bgDQLKhyXtB3HMbJhPFd2vKRpChWxgPe787WWVqEtjy8hGbZHqZKeRrEwMm3SN")
 bob_key = key.ExtendedKey.deserialize(
     "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
-
-# TODO: make outputs that sends to Alice/Bob, instead of using burn addresses
 
 
 def test_leaf_reveal_alice(manager: ContractManager):
@@ -35,7 +34,7 @@ def test_leaf_reveal_alice(manager: ContractManager):
     outputs = [
         CTxOut(
             nValue=AMOUNT,
-            scriptPubKey=bytes([0, 0x20, *[0x42]*32])
+            scriptPubKey=P2TR(alice_key.pubkey[1:], []).get_tr_info().scriptPubKey
         )
     ]
 
@@ -64,7 +63,7 @@ def test_leaf_reveal_bob(manager: ContractManager):
     outputs = [
         CTxOut(
             nValue=AMOUNT,
-            scriptPubKey=bytes([0, 0x20, *[0x42]*32])
+            scriptPubKey=P2TR(bob_key.pubkey[1:], []).get_tr_info().scriptPubKey
         )
     ]
 
@@ -265,7 +264,7 @@ def test_fraud_proof_full(manager: ContractManager, report):
     outputs = [
         CTxOut(
             nValue=AMOUNT,
-            scriptPubKey=bytes([0, 0x20, *[0x42]*32])
+            scriptPubKey=P2TR(bob_key.pubkey[1:], []).get_tr_info().scriptPubKey
         )
     ]
     out_instances = inst("bob_reveal", bob_signer, outputs)(
