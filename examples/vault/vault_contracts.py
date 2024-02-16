@@ -47,7 +47,7 @@ class Vault(StandardP2TR):
         )
 
         # witness: <sig> <ctv-hash> <trigger_out_i> <revault_out_i>
-        trigger_and_recover = StandardClause(
+        trigger_and_revault = StandardClause(
             name="trigger_and_revault",
             script=CScript([
                 0, OP_SWAP,   # no data tweak
@@ -102,9 +102,9 @@ class Vault(StandardP2TR):
 
         if self.has_partial_revault:
             if self.has_early_recover:
-                clauses = [trigger, [trigger_and_recover, recover]]
+                clauses = [trigger, [trigger_and_revault, recover]]
             else:
-                clauses = [trigger, trigger_and_recover]
+                clauses = [trigger, trigger_and_revault]
         else:
             if self.has_early_recover:
                 clauses = [trigger, recover]
