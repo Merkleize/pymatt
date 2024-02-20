@@ -43,6 +43,12 @@ NOTE: the examples do not handle fee management and will send transactions with 
 
 If not using the container above, please see an [example of custom bitcoin.conf](https://github.com/Merkleize/docker/blob/master/bitcoin.conf) to work with the scripts in this repository.
 
+# Docs
+
+See the [docs](./docs) folder for high-level documentation on how to design smart contracts using MATT.
+
+As the framework is still in development, we recommend looking at the code examples below for developer documentation on using pymatt.
+
 # Case studies
 
 The `examples` folder contains some utility scripts to work with regtest bitcoin-core:
