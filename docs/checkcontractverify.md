@@ -1,7 +1,8 @@
 # Introduction
 
-The content of this page is written with the current semantics of `OP_CHECKCONTRACTVERIFY` + `OP_CAT` in mind; however, it would equally apply to any implementation of the MATT framework.
+The content of this page describes the current semantics of `OP_CHECKCONTRACTVERIFY`.
 
+Together with `OP_CAT`, it is a straightforward implementation of MATT in bitcoin.
 
 ## P2TR and _augmented_ P2TR
 
