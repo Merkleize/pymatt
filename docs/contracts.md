@@ -81,7 +81,7 @@ where:
   - `params`: the compile-time list of parameters of the contract
   - `vars`: the list of variables (concretely stored in the data commitment of the covenant, aka the _state_ of the contract)
 
-`params` and `vars` should be omitted if empty. Moreover, for notational simplicity we prefer to omit (and list separately) the *global* parameters that are unchanged for all the contract in the diagram.
+`params` and `vars` should be omitted if empty. Moreover, for notational simplicity we prefer to omit (and list separately) the *global* parameters that are unchanged for all the contracts in the diagram.
 
 We call *clause* each spending condition of a contract. Each clause has a name (in lowercase, in snake_case if multiple words)
 
