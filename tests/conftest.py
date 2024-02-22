@@ -26,7 +26,7 @@ def rpc_test_wallet():
 
 @pytest.fixture
 def manager(rpc):
-    return ContractManager([], rpc, mine_automatically=True, poll_interval=0.01)
+    return ContractManager(rpc, mine_automatically=True, poll_interval=0.01)
 
 
 class TestReport:

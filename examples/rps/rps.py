@@ -232,7 +232,7 @@ if __name__ == "__main__":
 
     rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
 
-    manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
+    manager = ContractManager(rpc, mine_automatically=args.mine_automatically)
     environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)
 
     if args.alice:

@@ -335,7 +335,7 @@ if __name__ == "__main__":
 
     V = Vault(None, 10, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
 
-    manager = ContractManager([], rpc, mine_automatically=args.mine_automatically)
+    manager = ContractManager(rpc, mine_automatically=args.mine_automatically)
     environment = Environment(rpc, manager, None, None, False)
 
     print(f"Vault address: {V.get_address()}\n")
