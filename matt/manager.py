@@ -1,9 +1,3 @@
-# Encapsulates a blind signer for one or more known keys.
-# Used by the ContractManager to sign for the clause arguments of SignerType type.
-#
-# In the real world, we wouldn't blindly sign a hash, so the `sign` method
-# would include other info to help the signer decide (e.g.: the transaction)
-# There are no bad people here, though, so we keep it simple for now.
 from enum import Enum
 from io import BytesIO
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -19,6 +13,12 @@ from .contracts import P2TR, AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP
 from .utils import wait_for_output, wait_for_spending_tx
 
 
+# Encapsulates a blind signer for one or more known keys.
+# Used by the ContractManager to sign for the clause arguments of SignerType type.
+#
+# In the real world, we wouldn't blindly sign a hash, so the `sign` method
+# would include other info to help the signer decide (e.g.: the transaction)
+# There are no bad people here, though, so we keep it simple for now.
 class SchnorrSigner:
     def __init__(self, keys: Union[ExtendedKey, List[ExtendedKey]]):
         if not isinstance(keys, list):
