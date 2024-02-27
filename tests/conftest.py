@@ -1,9 +1,11 @@
 import pytest
 
 import os
+from pathlib import Path
 
 from matt.btctools.auth_proxy import AuthServiceProxy
 from matt.manager import ContractManager
+from test_utils.utxograph import create_utxo_graph
 
 
 rpc_url = "http://%s:%s@%s:%s" % (
@@ -12,6 +14,15 @@ rpc_url = "http://%s:%s@%s:%s" % (
     os.getenv("BTC_RPC_HOST", "localhost"),
     os.getenv("BTC_RPC_PORT", "18443")
 )
+
+
+def pytest_addoption(parser):
+    parser.addoption("--utxo_graph", action="store_true")
+
+
+@pytest.fixture
+def utxo_graph(request: pytest.FixtureRequest):
+    return request.config.getoption("--utxo_graph", False)
 
 
 @pytest.fixture(scope="session")
@@ -25,8 +36,15 @@ def rpc_test_wallet():
 
 
 @pytest.fixture
-def manager(rpc):
-    return ContractManager(rpc, mine_automatically=True, poll_interval=0.01)
+def manager(rpc, request: pytest.FixtureRequest, utxo_graph: bool):
+    manager = ContractManager(rpc, mine_automatically=True, poll_interval=0.01)
+    yield manager
+
+    if utxo_graph:
+        # Create the "tests/graphs" directory if it doesn't exist
+        path = Path("tests/graphs")
+        path.mkdir(exist_ok=True)
+        create_utxo_graph(manager, f"tests/graphs/{request.node.name}.html")
 
 
 class TestReport:
