@@ -96,14 +96,13 @@ class ContractInstance:
         self.outpoint: Optional[COutPoint] = None
         self.funding_tx: Optional[CTransaction] = None
 
+        # The following fields are filled when the instance is spent
         self.spending_tx: Optional[CTransaction] = None
-        self.spending_vin = None
-
-        self.spending_clause = None
-        self.spending_args = None
-
-        # Once spent, the list of ContractInstances produced
-        self.next = None
+        self.spending_vin: Optional[int] = None
+        self.spending_clause: Optional[str] = None
+        self.spending_args: Optional[dict] = None
+        # the new instances produced by spending this instance
+        self.next: Optional[List[ContractInstance]] = None
 
     def is_augm(self) -> bool:
         """
@@ -580,13 +579,16 @@ class ContractManager:
             # and add them to the manager if they are standard
             if isinstance(next_outputs, CTransaction):
                 # For now, we assume CTV clauses are terminal;
-                # this might be generalized in the future
+                # this might be generalized in the future to support tracking
+                # known output contracts in a CTV template
                 pass
             else:
+                next_instances: List[ContractInstance] = []
                 for clause_output in next_outputs:
                     output_index = vin if clause_output.n == -1 else clause_output.n
 
                     if output_index in out_contracts:
+                        next_instances.append(out_contracts[output_index])
                         continue  # output already specified by another input
 
                     out_contract = clause_output.next_contract
@@ -609,6 +611,9 @@ class ContractManager:
                     new_instance.status = ContractInstanceStatus.FUNDED
 
                     out_contracts[output_index] = new_instance
+
+                    next_instances.append(new_instance)
+                instance.next = next_instances
 
         result = list(out_contracts.values())
         for instance in result:
