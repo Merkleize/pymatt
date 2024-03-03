@@ -15,7 +15,9 @@ At this time, this only works on regtest.
 
 from enum import Enum
 from io import BytesIO
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+
+from typing_extensions import TypeGuard
 
 from .argtypes import SignerType
 from .btctools import script
@@ -68,14 +70,17 @@ class ContractInstanceStatus(Enum):
     SPENT = 2     # Already spent
 
 
-class ContractInstance:
+ContractT = TypeVar('ContractT', bound=Union[StandardP2TR, StandardAugmentedP2TR])
+
+
+class ContractInstance(Generic[ContractT]):
     """
     Represents a specific instance of a Contract. It keeps track of:
     - the instance status
     - if augmented, the data embedded in the Contract instance.
     """
 
-    def __init__(self, contract: Union[StandardP2TR, StandardAugmentedP2TR]):
+    def __init__(self, contract: ContractT):
         """
         Initializes a new ContractInstance with the given contract template.
 
@@ -88,7 +93,7 @@ class ContractInstance:
         self.data: Optional[bytes] = None
         self.data_expanded: Optional[ContractState] = None  # TODO: figure out a good API for this
 
-        self.manager: ContractManager = None
+        self.manager: Optional[ContractManager] = None
 
         self.last_height = 0
 
@@ -104,14 +109,14 @@ class ContractInstance:
         # the new instances produced by spending this instance
         self.next: Optional[List[ContractInstance]] = None
 
-    def is_augm(self) -> bool:
+    def is_augmented(self) -> TypeGuard['ContractInstance[StandardAugmentedP2TR]']:
         """
         Checks if the Contract contained in this instance is augmented.
 
         Returns:
             bool: True if the contract is augmented, False otherwise.
         """
-        return isinstance(self.contract, AugmentedP2TR) or isinstance(self.contract, StandardAugmentedP2TR)
+        return isinstance(self.contract, StandardAugmentedP2TR)
 
     def get_tr_info(self) -> TaprootInfo:
         """
@@ -123,7 +128,7 @@ class ContractInstance:
         Raises:
             ValueError: If the contract is augmented but no data is set for the instance.
         """
-        if not self.is_augm():
+        if not self.is_augmented():
             return self.contract.get_tr_info()
         else:
             if self.data is None:
@@ -168,7 +173,7 @@ class ContractInstance:
         Returns:
             Tuple[str, dict]: A tuple containing the name of the clause used and a dictionary of the arguments provided to the clause.
         """
-        if self.is_augm():
+        if self.is_augmented():
             assert self.data is not None
 
             return self.contract.decode_wit_stack(self.data, stack_elems)
@@ -292,7 +297,7 @@ class ContractManager:
         """
 
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.ABSTRACT)
-        if instance.is_augm():
+        if instance.is_augmented():
             if instance.data is None:
                 raise ValueError("Data not set in instance")
             scriptPubKey = instance.contract.get_tr_info(instance.data).scriptPubKey
@@ -620,7 +625,7 @@ class ContractManager:
             self.add_instance(instance)
         return result
 
-    def fund_instance(self, contract: Union[StandardP2TR, StandardAugmentedP2TR], amount: int, data: Optional[ContractState] = None) -> ContractInstance:
+    def fund_instance(self, contract: ContractT, amount: int, data: Optional[ContractState] = None) -> ContractInstance[ContractT]:
         """
         Creates a new contract instance from a specified contract template, funds it with a specified amount of satoshis,
         and adds it to the manager.

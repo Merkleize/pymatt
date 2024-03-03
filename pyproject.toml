@@ -10,7 +10,9 @@ authors = [
 ]
 description = "Merkleize All The Things"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 keywords = ["covenant", "smart contracts", "bitcoin"]
 license = { file = "LICENSE" }
-dependencies = []
+dependencies = [
+    'typing_extensions >= 4.9.0'
+]
