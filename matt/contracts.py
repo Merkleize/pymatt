@@ -73,7 +73,7 @@ class ClauseOutput:
 
     n: int
     next_contract: AbstractContract  # only StandardP2TR and StandardAugmentedP2TR are supported so far
-    next_state: Optional[ContractState] = None  # only meaningful if c is augmented
+    next_state: Optional[ContractState] = None  # only meaningful if the contract is augmented
     next_amount: ClauseOutputAmountBehaviour = ClauseOutputAmountBehaviour.PRESERVE_OUTPUT
 
     def __repr__(self):
