@@ -10,7 +10,7 @@ Alice                                       Bob
 
 choose m_a <-- {0, 1, 2}
 r_a <$-- {0, 1}^256
-c_a = SHA256(m_a)
+c_a = SHA256(m_a || r_a)
 
                       pk_a, c_a
                |------------------------>
@@ -32,7 +32,7 @@ Sign psbt_game.
 
 ### Gameplay
 
-Once the transaction is confirmed, bob both parties monitor the UTXO containing the game instance,
+Once the transaction is confirmed, both parties monitor the UTXO containing the game instance,
 and play the moves when it's their turn, as per the rules.
 
 """
