@@ -36,8 +36,6 @@ jobs:
           pip install .
       - name: Create test wallet
         run: bash ./examples/init.sh
-      - name: Add repository root to PYTHONPATH
-        run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
       - name: Run tests and capture output
         run: pytest -vv
       - name: Upload test output as artifact
