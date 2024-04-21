@@ -1,11 +1,15 @@
 import pytest
 
+import sys
 import os
 from pathlib import Path
 
 from matt.btctools.auth_proxy import AuthServiceProxy
 from matt.manager import ContractManager
 from test_utils.utxograph import create_utxo_graph
+
+root_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
+sys.path.append(root_path)
 
 
 rpc_url = "http://%s:%s@%s:%s" % (
