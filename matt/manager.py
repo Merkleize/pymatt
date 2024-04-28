@@ -621,7 +621,7 @@ class ContractManager:
                         raise ValueError("Unsupported contract type")
                 instance.next = next_instances
 
-        result = list(out_contracts.values())
+        result = [out_contracts[idx] for idx in sorted(out_contracts.keys())]
         for instance in result:
             self.add_instance(instance)
         return result
