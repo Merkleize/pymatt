@@ -599,25 +599,26 @@ class ContractManager:
                     out_contract = clause_output.next_contract
                     new_instance = ContractInstance(out_contract)
 
-                    if isinstance(out_contract, (P2TR, OpaqueP2TR, StandardP2TR)):
+                    if isinstance(out_contract, (StandardP2TR, StandardAugmentedP2TR)):
+                        if isinstance(out_contract, StandardAugmentedP2TR):
+                            if clause_output.next_state is None:
+                                raise ValueError("Missing data for augmented output")
+                            new_instance.data = clause_output.next_state.encode()
+                            new_instance.data_expanded = clause_output.next_state
+
+                        new_instance.last_height = instance.last_height
+
+                        new_instance.outpoint = COutPoint(int(tx.hash, 16), output_index)
+                        new_instance.funding_tx = tx
+                        new_instance.status = ContractInstanceStatus.FUNDED
+
+                        out_contracts[output_index] = new_instance
+
+                        next_instances.append(new_instance)
+                    elif isinstance(out_contract, (P2TR, OpaqueP2TR)):
                         continue  # nothing to do, will not track this output
-                    elif isinstance(out_contract, StandardAugmentedP2TR):
-                        if clause_output.next_state is None:
-                            raise ValueError("Missing data for augmented output")
-                        new_instance.data = clause_output.next_state.encode()
-                        new_instance.data_expanded = clause_output.next_state
                     else:
                         raise ValueError("Unsupported contract type")
-
-                    new_instance.last_height = instance.last_height
-
-                    new_instance.outpoint = COutPoint(int(tx.hash, 16), output_index)
-                    new_instance.funding_tx = tx
-                    new_instance.status = ContractInstanceStatus.FUNDED
-
-                    out_contracts[output_index] = new_instance
-
-                    next_instances.append(new_instance)
                 instance.next = next_instances
 
         result = list(out_contracts.values())
