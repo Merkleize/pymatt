@@ -1,7 +1,7 @@
 from typing import Tuple
 import pytest
 
-from examples.vault.vault_contracts import Vault
+from examples.vault.vault_contracts import Vault, Unvaulting
 
 from matt.btctools import key
 from matt.btctools.auth_proxy import AuthServiceProxy, JSONRPCException
@@ -183,7 +183,12 @@ def test_vault_trigger_with_revault_and_withdraw(vault_specs: VaultSpecs, rpc: A
             {**args, "sig": sigs[i]}
         ))
 
-    [U_inst] = manager.spend_and_wait([V_inst_1, V_inst_2, V_inst_3], spend_tx)
+    [U_inst, V_revault_inst] = manager.spend_and_wait([V_inst_1, V_inst_2, V_inst_3], spend_tx)
+
+    assert isinstance(U_inst.contract, Unvaulting)
+    assert isinstance(V_revault_inst.contract, Vault)
+    assert manager.instances.index(U_inst) >= 0
+    assert manager.instances.index(V_revault_inst) >= 0
 
     report.write(vault_description, format_tx_markdown(spend_tx, "Trigger (with revault) [3 vault inputs]"))
 
