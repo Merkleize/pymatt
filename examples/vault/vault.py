@@ -136,7 +136,8 @@ def execute_command(input_line: str):
         return
     elif action == "list":
         for i, instance in enumerate(manager.instances):
-            print(i, instance.status, instance)
+            print(i, instance.status.name,
+                  f"{instance.contract} data={None if instance.data is None else instance.data.hex()} value={instance.get_value()} outpoint={(instance.outpoint.hash).to_bytes(32, byteorder='big').hex()}:{instance.outpoint.n}")
     elif action == "mine":
         if '@0' in args_dict:
             n_blocks = int(args_dict['@0'])
@@ -298,7 +299,7 @@ def cli_main():
             raise  # exit
         except Exception as err:
             print(f"Error: {err}")
-            print(traceback.format_exc())
+            # print(traceback.format_exc())
 
 
 def script_main(script_filename: str):
