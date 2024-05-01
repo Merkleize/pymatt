@@ -18,6 +18,12 @@ Install the library with:
 $ pip install .
 ```
 
+If you're also modifying the framework, you might want to install the package in editable mode:
+
+```bash
+$ pip install -e .
+```
+
 ## Run bitcoin-inquisition MATT in regtest mode
 
 The fastest way to get started is [this docker container](https://github.com/Merkleize/docker):
@@ -66,10 +72,10 @@ For the ones marked with [cli], a simple interactive tool allows to play with th
 
 # Tests
 
-This project uses `pytest` to run automated tests. Install it with:
+This project uses `pytest` to run automated tests. Install the dependencies with:
 
 ```bash
-$ pip install pytest
+$ pip install -r requirements-dev.txt
 ```
 
 The test suite requires a running instance of the MATT-enabled bitcoin-inquisition, for example using the container above. The [init.sh](examples/init.sh) script makes sure that a funded test wallet is loaded.
