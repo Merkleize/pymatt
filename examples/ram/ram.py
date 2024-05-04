@@ -143,9 +143,11 @@ def execute_command(input_line: str):
             raise ValueError("Invalid item")
 
         R_inst = manager.instances[item_index]
-        mt = MerkleTree(R_inst.data_expanded)
+        assert isinstance(R_inst.data_expanded, RAM.State)
 
-        if leaf_index not in range(len(R_inst.data_expanded)):
+        mt = MerkleTree(R_inst.data_expanded.leaves)
+
+        if leaf_index not in range(len(R_inst.data_expanded.leaves)):
             raise ValueError("Invalid leaf index")
 
         outputs = []
@@ -171,9 +173,12 @@ def execute_command(input_line: str):
             raise ValueError("Invalid item")
 
         R_inst = manager.instances[item_index]
-        mt = MerkleTree(R_inst.data_expanded)
 
-        if leaf_index not in range(len(R_inst.data_expanded)):
+        assert isinstance(R_inst.data_expanded, RAM.State)
+
+        mt = MerkleTree(R_inst.data_expanded.leaves)
+
+        if leaf_index not in range(len(R_inst.data_expanded.leaves)):
             raise ValueError("Invalid leaf index")
 
         result = R_inst("write")(
@@ -184,8 +189,6 @@ def execute_command(input_line: str):
 
         assert len(result) == 1
 
-        result[0].data_expanded = R_inst.data_expanded[:leaf_index] + [new_value] + R_inst.data_expanded[leaf_index+1:]
-
         print("Done")
     elif action == "fund":
         amount = int(args_dict["amount"])
@@ -193,8 +196,6 @@ def execute_command(input_line: str):
 
         R = RAM(len(content))
         R_inst = manager.fund_instance(R, amount, data=R.State(content))
-
-        R_inst.data_expanded = content
 
         print(R_inst.funding_tx)
 
