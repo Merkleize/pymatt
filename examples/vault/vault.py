@@ -10,7 +10,6 @@ import os
 
 import logging
 import shlex
-import traceback
 from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv

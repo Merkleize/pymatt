@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 import hashlib
 
-from matt import CCV_FLAG_CHECK_INPUT, NUMS_KEY
+from matt import NUMS_KEY
 from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.messages import sha256
 from matt.btctools import script
-from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript, bn2vch
+from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript
 from matt.contracts import P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR, ContractState
 from matt.script_helpers import check_input_contract, check_output_contract
 from matt.utils import encode_wit_element, make_ctv_template
