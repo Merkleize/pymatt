@@ -1,6 +1,6 @@
 # WIP Python framework for MATT smart contracts
 
-This repository contains a (very much Work In Progress) framework to create and test smart contracts using the `OP_CHECKCONTRACVERIFY` opcode of MATT.
+This repository contains a (very much Work In Progress) framework to create and test smart contracts using the `OP_CHECKCONTRACTVERIFY` opcode of MATT.
 
 # Prerequisites
 ## Installing the library
