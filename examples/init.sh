@@ -13,7 +13,7 @@ if [[ $WALLET_CREATE_RESULT == *"Database already exists"* ]]; then
 fi
 
 # Get a new address from "testwallet"
-NEW_ADDRESS=$($BITCOIN_CLI getnewaddress)
+NEW_ADDRESS=$($BITCOIN_CLI -rpcwallet=testwallet getnewaddress)
 
 # Check for valid address before proceeding
 if [[ -z $NEW_ADDRESS ]]; then

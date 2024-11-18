@@ -31,12 +31,7 @@ def utxo_graph(request: pytest.FixtureRequest):
 
 @pytest.fixture(scope="session")
 def rpc():
-    return AuthServiceProxy(rpc_url)
-
-
-@pytest.fixture(scope="session")
-def rpc_test_wallet():
-    return AuthServiceProxy(f"{rpc_url}/wallet/test_wallet")
+    return AuthServiceProxy(f"{rpc_url}/wallet/testwallet")
 
 
 @pytest.fixture

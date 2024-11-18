@@ -62,6 +62,7 @@ rpc_user = os.getenv("RPC_USER", "rpcuser")
 rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
 rpc_host = os.getenv("RPC_HOST", "localhost")
 rpc_port = os.getenv("RPC_PORT", 18443)
+rpc_wallet_name = os.getenv("RPC_WALLET_NAME", "testwallet")
 
 
 class AliceGame:
@@ -230,7 +231,7 @@ if __name__ == "__main__":
     elif args.scissors:
         move = 2
 
-    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
+    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}/wallet/{rpc_wallet_name}")
 
     manager = ContractManager(rpc, mine_automatically=args.mine_automatically)
     environment = Environment(rpc, manager, args.host, args.port, not args.non_interactive)

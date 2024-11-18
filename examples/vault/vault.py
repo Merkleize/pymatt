@@ -63,6 +63,7 @@ rpc_user = os.getenv("RPC_USER", "rpcuser")
 rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
 rpc_host = os.getenv("RPC_HOST", "localhost")
 rpc_port = os.getenv("RPC_PORT", 18443)
+wallet_name = os.getenv("WALLET_NAME", "testwallet")
 
 
 def segwit_addr_to_scriptpubkey(addr: str) -> bytes:
@@ -331,7 +332,7 @@ if __name__ == "__main__":
     recover_priv_key = key.ExtendedKey.deserialize(
         "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
-    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
+    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}/wallet/{wallet_name}")
 
     V = Vault(None, 10, recover_priv_key.pubkey[1:], unvault_priv_key.pubkey[1:])
 

@@ -59,6 +59,7 @@ rpc_user = os.getenv("RPC_USER", "rpcuser")
 rpc_password = os.getenv("RPC_PASSWORD", "rpcpass")
 rpc_host = os.getenv("RPC_HOST", "localhost")
 rpc_port = os.getenv("RPC_PORT", 18443)
+rpc_wallet_name = os.getenv("RPC_WALLET_NAME", "testwallet")
 
 
 def parse_outputs(output_strings: List[str]) -> List[Tuple[str, int]]:
@@ -246,7 +247,7 @@ if __name__ == "__main__":
     recover_priv_key = key.ExtendedKey.deserialize(
         "tprv8ZgxMBicQKsPeDvaW4xxmiMXxqakLgvukT8A5GR6mRwBwjsDJV1jcZab8mxSerNcj22YPrusm2Pz5oR8LTw9GqpWT51VexTNBzxxm49jCZZ")
 
-    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}")
+    rpc = AuthServiceProxy(f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}/wallet/{rpc_wallet_name}")
 
     manager = ContractManager(rpc, mine_automatically=args.mine_automatically)
     environment = Environment(rpc, manager, None, None, False)
