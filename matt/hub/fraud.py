@@ -62,7 +62,7 @@ Once a leaf (l, l) is reached, a single computational step is part of the commit
 - Alice claims the final hashed state is h_{l + 1; a}
 - Bob claims the final hashed state is h_{l + 1; b}
 
-Clearly, only the honest party can exibit the value of x_l, and the contract can adjudicate this part as the winner.
+Clearly, only the honest party can exibit the value of x_l, and the contract can adjudicate this party as the winner.
 
 Summing up, the following specs define the two contracts Bisect_1 (Alice's turn) and Bisect_2 (Bob's turn), and the
 final Leaf contract.
