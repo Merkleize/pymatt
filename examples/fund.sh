@@ -13,7 +13,7 @@ ADDRESS=$1
 AMOUNT=${2:-0.00002}
 
 # Send the specified amount (or 0.0002 if none specified) to the provided address
-bitcoin-cli -regtest sendtoaddress $ADDRESS $AMOUNT
+bitcoin-cli -regtest -rpcwallet=testwallet sendtoaddress $ADDRESS $AMOUNT
 
 # Generate a block to confirm the transaction
-bitcoin-cli -regtest -generate 1
+bitcoin-cli -regtest -rpcwallet=testwallet -generate 1
