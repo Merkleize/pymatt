@@ -10,7 +10,7 @@ from matt.script_helpers import check_input_contract, older
 
 class Vault(StandardP2TR):
     def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes, unvault_pk: bytes, *, has_partial_revault=True, has_early_recover=True):
-        assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32 and len(unvault_pk)
+        assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32 and len(unvault_pk) == 32
 
         self.alternate_pk = alternate_pk
         self.spend_delay = spend_delay
