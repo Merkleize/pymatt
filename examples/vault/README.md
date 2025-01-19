@@ -4,6 +4,8 @@ The `vault.py` script provides a command-line and interactive interface for Bitc
 
 Compared to that prototype, this version uses the `CCV_FLAG_DEDUCT_OUTPUT_AMOUNT` to allow partial revaulting of a Vault UTXO. This was the only missing feature as compared to the implementation using `OP_VAULT` (albeit with some differences in the revaulting semantics).
 
+It uses the `OP_CHECKCONTRACTVERIFY` and `OP_CHECKTEMPLATEVERIFY` opcodes.
+
 ## Prerequisites
 
 After following the [root prerequisites](../..#prerequisites), make sure to install the additional requirements:
@@ -25,7 +27,7 @@ $ python vault.py -m
 ## Command-line Arguments
 
 - `--mine-automatically` or `-m`: Enables automatic mining any time transactions are broadcast (assuming a wallet is loaded in bitcoin-core).
-- `--script` or `-s`: Executes commands from a specified script file, instead of running the interactive CLI interface. Some examples are in the (script)[scripts] folder.
+- `--script` or `-s`: Executes commands from a specified script file, instead of running the interactive CLI interface. Some examples are in the [scripts](scripts) folder.
 
 ## Interactive Commands
 
@@ -47,3 +49,9 @@ The following commands implement specific features of the vault UTXOs (trigger, 
 - `withdraw`: Completes the withdrawal from the vault; will fail if the timelock of 10 blocks is not satisfied.
 
 The `scripts` folder has some example of interactions with the vault.
+
+## Minivault
+
+A simplified construction that only uses `OP_CHECKCONTRACTVERIFY` (without using `OP_CHECKTEMPLATEVERIFY`) is implemented in [minivault_contracts.py](minivault_contracts.py). It has all the same features of the full construction, except that the final withdrawal must necessarily go entirely to a single P2TR address.
+
+Check out [test_minivault.py](../../tests/test_minivault.py) to see how it would be used.
