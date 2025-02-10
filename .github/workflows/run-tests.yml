@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     container: bigspider/bitcoin_matt
     steps:
       - name: Prepare Configuration File
@@ -20,24 +20,32 @@ jobs:
       - name: Run MATT-enabled bitcoind
         run: |
           bitcoind -regtest --daemon
+      - name: Set up dependencies
+        run: |
+          apt-get update
+          apt-get install -y libssl-dev libffi-dev
+          apt-get install -y python3-venv
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.10'
       - name: Clone
         uses: actions/checkout@v4
-      - name: Install pip and pytest
+      - name: Install dependencies
         run: |
-          apt-get update
-          apt-get install -y python3-pip
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements-dev.txt
-      - name: Install pymatt
-        run: |
           pip install .
+        shell: bash
       - name: Create test wallet
         run: bash ./examples/init.sh
       - name: Run tests and capture output
-        run: pytest -vv
+        run: |
+          source venv/bin/activate
+          pytest -vv
+        shell: bash
       - name: Upload test output as artifact
         uses: actions/upload-artifact@v4
         with:

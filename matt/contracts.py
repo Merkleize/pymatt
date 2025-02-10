@@ -1,3 +1,5 @@
+import hashlib
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -9,6 +11,19 @@ from .btctools.key import tweak_add_pubkey
 from .btctools.messages import CTransaction
 from .btctools.script import OP_1, CScript, TaprootInfo
 from .btctools.segwit_addr import encode_segwit_address
+
+
+def tweak_embed_data(key: bytes, data: bytes) -> Optional[Tuple[bytes, Optional[bool]]]:
+    """
+    Tweaks a key with the sha256 hash of the data, returning the tweaked key and whether the result had to be negated.
+    If the data is empty, the key is returned as is.
+    """
+
+    if len(data) == 0:
+        return key, None
+
+    data_tweak = hashlib.sha256(key + data).digest()
+    return tweak_add_pubkey(key, data_tweak)
 
 
 class AbstractContract:
@@ -317,9 +332,7 @@ class AugmentedP2TR(AbstractContract):
         return self.get_tr_info(b'\0'*32).merkle_root
 
     def get_tr_info(self, data: bytes) -> TaprootInfo:
-        assert len(data) == 32
-
-        internal_pubkey, _ = tweak_add_pubkey(self.naked_internal_pubkey, data)
+        internal_pubkey, _ = tweak_embed_data(self.naked_internal_pubkey, data)
 
         return script.taproot_construct(internal_pubkey, self.get_scripts())
 
