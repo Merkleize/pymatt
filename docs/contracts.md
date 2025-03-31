@@ -44,13 +44,13 @@ Here's an example of a [vault](https://github.com/Merkleize/pymatt/tree/master/e
 ```mermaid
 graph LR
     VAULT -->|recover| R[ ]
-    VAULT -->|"trigger\n(ctv_hash)"| UNVAULTING
-    VAULT ---|"trigger_and_revault\n(ctv_hash)"| X( )
+    VAULT -->|"trigger<br>(ctv_hash)"| UNVAULTING
+    VAULT ---|"trigger_and_revault<br>(ctv_hash)"| X( )
     X --> VAULT
     X --> UNVAULTING
     style X display: none;
 
-    UNVAULTING("UNVAULTING\n[ctv_hash]")
+    UNVAULTING("UNVAULTING<br>[ctv_hash]")
     UNVAULTING -->|recover| R[ ]
     UNVAULTING -->|withdraw| D[ ]
 
