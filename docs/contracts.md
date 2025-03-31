@@ -43,7 +43,7 @@ Here's an example of a [vault](https://github.com/Merkleize/pymatt/tree/master/e
 
 ```mermaid
 graph LR
-    VAULT -->|recover| R[ ]
+    VAULT -->|recover| R["recovery<br>address"]
     VAULT -->|"trigger<br>(ctv_hash)"| UNVAULTING
     VAULT ---|"trigger_and_revault<br>(ctv_hash)"| X( )
     X --> VAULT
@@ -51,8 +51,8 @@ graph LR
     style X display: none;
 
     UNVAULTING("UNVAULTING<br>[ctv_hash]")
-    UNVAULTING -->|recover| R[ ]
-    UNVAULTING -->|withdraw| D[ ]
+    UNVAULTING -->|recover| R["recovery<br>address"]
+    UNVAULTING -->|withdraw| D["ctv outputs<br>(possibly several)"]
 
     classDef contract stroke:#333,stroke-width:2px;
     class VAULT,UNVAULTING contract
