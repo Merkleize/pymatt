@@ -2,18 +2,17 @@
 build-backend = 'hatchling.build'
 requires = [ 'hatchling' ]
 
-
 [project]
-name = "matt"
-version = "0.0.1"
 authors = [
-    {name = "Salvatore Ingala", email = "salvatoshi@protonmail.com"},
+    {name = 'Salvatore Ingala', email = 'salvatoshi@protonmail.com'},
 ]
-description = "Merkleize All The Things"
-readme = "README.md"
-requires-python = ">=3.8"
-keywords = ["covenant", "smart contracts", "bitcoin"]
-license = { file = "LICENSE" }
 dependencies = [
-    'typing_extensions >= 4.9.0'
+  'typing_extensions >= 4.9.0'
 ]
+description = 'Merkleize All The Things'
+keywords = ['covenant', 'smart contracts', 'bitcoin']
+license = { file = 'LICENSE' }
+name = 'matt'
+readme = 'README.md'
+requires-python = '>=3.8'
+version = '0.0.1'
