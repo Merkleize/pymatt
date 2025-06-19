@@ -2,9 +2,10 @@
 build-backend = 'hatchling.build'
 requires = [ 'hatchling' ]
 
+
 [project]
 authors = [
-    {name = 'Salvatore Ingala', email = 'salvatoshi@protonmail.com'},
+  {name = 'Salvatore Ingala', email = 'salvatoshi@protonmail.com'},
 ]
 dependencies = [
   'typing_extensions >= 4.9.0'
