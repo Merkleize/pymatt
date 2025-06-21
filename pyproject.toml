@@ -21,7 +21,7 @@ version = '0.0.1'
 
 [project.optional-dependencies]
 ram = [
-  'prompt-toolkit>=3.0.31, <3.1',
+  'prompt-toolkit >=3.0.31,<3.1',
   'python-dotenv ==0.13.0',
 ]
 rps = [
