@@ -33,6 +33,12 @@ vault = [
 ]
 
 
+[tool.pytest.ini_options]
+python_files = '*.py'
+pythonpath = [ 'src' ]
+testpaths = [ 'tests' ]
+
+
 [tool.uv]
 dev-dependencies = [
   'bokeh >=3.1.0,<4',
