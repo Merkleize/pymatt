@@ -80,6 +80,7 @@ dmypy.json
 .idea
 .vscode
 
+# generated
 examples/**/.cli-history
-
+report.md
 tests/graphs/**
