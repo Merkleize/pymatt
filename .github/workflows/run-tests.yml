@@ -20,32 +20,23 @@ jobs:
       - name: Run MATT-enabled bitcoind
         run: |
           bitcoind -regtest --daemon
-      - name: Set up dependencies
-        run: |
-          apt-get update
-          apt-get install -y libssl-dev libffi-dev
-          apt-get install -y python3-venv
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.10'
-      - name: Clone
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements-dev.txt
-          pip install .
-        shell: bash
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python
+        run: uv python install 3.10
+      - name: Set up virtual environment
+        run: uv venv --python 3.10
+      - name: Activate virtual environment
+        run: source .venv/bin/activate
+      - name: Load development dependencies
+        run: uv sync --dev
       - name: Create test wallet
-        run: bash ./examples/init.sh
-      - name: Run tests and capture output
-        run: |
-          source venv/bin/activate
-          pytest -vv
+        run: ./examples/init.sh
         shell: bash
+      - name: Run tests and capture output
+        run: pytest -vv
       - name: Upload test output as artifact
         uses: actions/upload-artifact@v4
         with:
