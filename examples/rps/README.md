@@ -9,18 +9,49 @@ This script implements the Rock, Paper, Scissors game based on a protocol descri
 After following the [root prerequisites](../..#prerequisites), make sure to install the additional requirements:
 
 ```bash
-$ pip install -r requirements.txt
+uv sync --extra rps
 ```
+
+<details>
+  <summary> Sample out of Rock-Paper-Scissors extra packages being installed </summary>
+
+  ```bash
+  $ uv sync --extra rps
+  > Resolved 30 packages in 0.36ms
+  > Installed 1 package in 1ms
+  >  + python-dotenv==0.13.0
+  ```
+</details>
 
 ## How to Run:
 
 The game can be played as either Alice or Bob, and you can specify your move (rock, paper, scissors). Additionally, other options like non-interactive mode and automatic mining can be set.
 
 ```bash
-python rps.py --alice/--bob [--rock/--paper/--scissors] [--non-interactive] [--mine-automatically] [--host HOST] [--port PORT]
+python examples/rps/rps.py --alice/--bob [--rock/--paper/--scissors] [--non-interactive] [--mine-automatically] [--host HOST] [--port PORT]
 ```
 
-In order to play a game, run `python rps.py --alice` on a shell, and `python rps.py --bob` on a separate shell.
+<details>
+  <summary> Sample output of command with backend-image running </summary>
+
+  ```bash
+  $ python examples/rps/rps.py --alice --rock --non-interactive --mine-automatically --host localhost --port 18443
+  > ...
+  > ...
+  > ...
+  > ...
+  > ...
+  $ python examples/rps/rps.py --bob --paper --non-interactive --mine-automatically --host localhost --port 18443
+  > ...
+  > ...
+  > ...
+  > ...
+  > ...
+  ```
+</details>
+
+In order to play a game, run `python examples/rps/rps.py --alice` on a shell,
+and `python examples/rps/rps.py --bob` on a separate shell.
 
 The two scripts will establish a socket to communicate and negotiate a game UTXO.
 

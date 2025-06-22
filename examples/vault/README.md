@@ -11,8 +11,21 @@ It uses the `OP_CHECKCONTRACTVERIFY` and `OP_CHECKTEMPLATEVERIFY` opcodes.
 After following the [root prerequisites](../..#prerequisites), make sure to install the additional requirements:
 
 ```bash
-$ pip install -r requirements.txt
+uv sync --extra vault
 ```
+
+<details>
+  <summary> Sample out of Vault extra packages being installed </summary>
+
+  ```bash
+  $ uv sync --extra vault
+  > Resolved 30 packages in 0.37ms
+  > Installed 3 packages in 3ms
+  >  + prompt-toolkit==3.0.51
+  >  + python-dotenv==0.13.0
+  >  + wcwidth==0.2.13
+  ```
+</details>
 
 ## How to Run
 
@@ -21,8 +34,21 @@ $ pip install -r requirements.txt
 To run the script, navigate to the directory containing `vault.py` and use the following command:
 
 ```bash
-$ python vault.py -m
+python examples/vault/vault.py -m
 ```
+
+<details>
+  <summary> Sample output of command with backend-image running </summary>
+
+  ```bash
+  $ python examples/vault/vault.py -m
+  > ...
+  > ...
+  > ...
+  > ...
+  > ...
+  ```
+</details>
 
 ## Command-line Arguments
 
