@@ -9,8 +9,21 @@ It is a building block for more complex smart contracts that require "memory" ac
 After following the [root prerequisites](../..#prerequisites), make sure to install the additional requirements:
 
 ```bash
-$ pip install -r requirements.txt
+$ uv sync --extra ram
 ```
+
+<details>
+  <summary> Sample out of RAM extra packages being installed </summary>
+
+  ```bash
+  $ uv sync --extra ram
+  > Resolved 30 packages in 0.37ms
+  > Installed 3 packages in 3ms
+  >  + prompt-toolkit==3.0.51
+  >  + python-dotenv==0.13.0
+  >  + wcwidth==0.2.13
+  ```
+</details>
 
 ## How to Run
 
@@ -19,8 +32,21 @@ $ pip install -r requirements.txt
 To run the script, navigate to the directory containing `vault.py` and use the following command:
 
 ```bash
-$ python ram.py -m
+python examples/ram/ram.py -m
 ```
+
+<details>
+  <summary> Sample output of command with backend-image running </summary>
+
+  ```bash
+  $ python examples/ram/ram.py -m
+  > ...
+  > ...
+  > ...
+  > ...
+  > ...
+  ```
+</details>
 
 ## Command-line Arguments
 
