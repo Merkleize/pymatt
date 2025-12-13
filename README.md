@@ -2,8 +2,7 @@
 
 ## WIP Python framework for MATT smart contracts
 
-This repository contains a (very much Work In Progress) framework to create and test
-smart contracts using the `OP_CHECKCONTRACTVERIFY` opcode of MATT.
+This repository contains a (very much Work In Progress) framework to create and test smart contracts using the `OP_CHECKCONTRACTVERIFY` opcode.
 
 ## Prerequisites
 
@@ -26,7 +25,7 @@ Install the library with:
 $ pip install pymatt
 ```
 
-### Run bitcoin-inquisition MATT in regtest mode
+## Run bitcoin-inquisition MATT in regtest mode
 
 The fastest way to get started is [this docker container](https://github.com/Merkleize/docker):
 
@@ -34,6 +33,28 @@ The fastest way to get started is [this docker container](https://github.com/Mer
 $ docker pull bigspider/bitcoin_matt
 $ docker run -d -p 18443:18443 bigspider/bitcoin_matt
 ```
+
+Alternatively, build the same yourself from [this branch](https://github.com/Merkleize/bitcoin/tree/inq-ccv). Here's the `bitcoin.conf` file used for these examples:
+
+<details>
+  <summary> <tt>bitcoin.conf</tt> </summary>
+
+  ```
+  regtest=1
+  printtoconsole=1
+  server=1
+  txindex=1
+  fallbackfee=0.00001
+  minrelaytxfee=0
+  blockmintxfee=0
+
+  [regtest]
+  rpcbind=0.0.0.0
+  rpcallowip=0.0.0.0/0
+  rpcuser=rpcuser
+  rpcpassword=rpcpass
+  ```
+</details>
 
 ### Case studies
 
@@ -57,50 +78,21 @@ More code examples can be found in the test suite.
 
 See the [docs](./docs) folder for high-level documentation on how to design smart contracts using MATT.
 
-As the framework is still in development, we recommend looking at the code examples below for
-developer documentation on using pymatt.
+As the framework is still in development, we recommend looking at the code examples below for developer documentation on using pymatt.
 
 ## Contribution
 
 ### Prerequisites
 
-* [git](https://git-scm.com/) - --fast-version-control
-* [uv](https://docs.astral.sh/uv) - extremely fast Python package & project manager written in Rust
+The examples in this repository can be installed and set up using [uv](https://docs.astral.sh/uv).
 
-
-The following guide walks through setting up your local working environment using `git`
-as distributed version control system and `uv` as Python package and version manager.
-If you do not have `git` installed, run the following command.
+If you do not have `uv` installed, run one of the following commands.
 
 <details>
-  <summary> Install using Homebrew (Darwin) </summary>
-  
-  ```bash
-  brew install git
-  ```
-</details>
-
-<details>
-  <summary> Install via binary installer (Linux) </summary>
-  
-  * Debian-based package management
-  ```bash
-  sudo apt install git-all
-  ```
-
-  * Fedora-based package management
-  ```bash
-  sudo dnf install git-all
-  ```
-</details>
-
-If you do not have `uv` installed, run the following command.
-
-<details>
-  <summary> Install using Homebrew (Darwin) </summary>
+  <summary> Install using <tt>pipx</tt> </summary>
 
   ```bash
-  brew install uv
+  pipx install uv
   ```
 </details>
 
@@ -112,11 +104,15 @@ If you do not have `uv` installed, run the following command.
   ```
 </details>
 
-Once you have `git` distributed version control system installed, you can
-clone the current repository and  install any version of Python above version
-3.9 for this project. The following commands help you set up and activate a
-Python virtual environment where `uv` can download project dependencies from the `PyPI`
-open-sourced registry defined under `pyproject.toml` file.
+<details>
+  <summary> Install using Homebrew (Darwin) </summary>
+
+  ```bash
+  brew install uv
+  ```
+</details>
+
+The following commands help you set up and activate a Python virtual environment where `uv` can download project dependencies from the `PyPI` open-sourced registry defined under `pyproject.toml` file.
 
 <details>
   <summary> Set up environment and synchronize project dependencies </summary>
@@ -153,29 +149,13 @@ If not using the container above, please see an [example of custom bitcoin.conf]
 to work with the scripts in this repository.
 
 You can use the following command to install the extra dependencies required for
-running the examples attached.
+running the examples in the repository.
 
 <details>
-  <summary> Install dependencies for `RAM` example </summary>
+  <summary> Install dependencies for the examples </summary>
 
   ```bash
-  uv sync --dev --extra ram
-  ```
-</details>
-
-<details>
-  <summary> Install dependencies for `Rps` example </summary>
-
-  ```bash
-  uv sync --dev --extra rps
-  ```
-</details>
-
-<details>
-  <summary> Install dependencies for `Vault` example </summary>
-
-  ```bash
-  uv sync --dev --extra vault
+  uv sync --dev --extra examples
   ```
 </details>
 
@@ -186,40 +166,6 @@ This project uses `pytest` to run automated tests. Install the dependencies with
 ```bash
 uv sync --dev
 ```
-
-<details>
-  <summary> Sample installation output for development dependencies </summary>
-
-  ```bash
-  $ uv sync --dev
-  > Resolved 30 packages in 0.35ms
-  > Installed 24 packages in 124ms
-  >  + attrs==25.3.0
-  >  + bokeh==3.1.1
-  >  + contourpy==1.1.1
-  >  + iniconfig==2.1.0
-  >  + jinja2==3.1.6
-  >  + markupsafe==2.1.5
-  >  + matt==0.0.1 (from file:///path/to/your/local/workspace/pymatt)
-  >  + networkx==3.1
-  >  + numpy==1.24.4
-  >  + packaging==25.0
-  >  + pandas==2.0.3
-  >  + pillow==10.4.0
-  >  + pluggy==1.5.0
-  >  + py==1.11.0
-  >  + pytest==6.2.5
-  >  + python-dateutil==2.9.0.post0
-  >  + pytz==2025.2
-  >  + pyyaml==6.0.2
-  >  + six==1.17.0
-  >  + toml==0.10.2
-  >  + tornado==6.4.2
-  >  + typing-extensions==4.13.2
-  >  + tzdata==2025.2
-  >  + xyzservices==2025.4.0
-  ```
-</details>
 
 The test suite requires a running instance of the MATT-enabled bitcoin-inquisition,
 for example using the container above. The [init.sh](examples/init.sh) script makes
