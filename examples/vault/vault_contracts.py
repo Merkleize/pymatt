@@ -4,11 +4,13 @@ from typing import Optional
 from matt import CCV_FLAG_DEDUCT_OUTPUT_AMOUNT, NUMS_KEY
 from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.script import OP_CHECKCONTRACTVERIFY, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_SWAP, OP_TRUE, CScript
-from matt.contracts import ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardP2TR, StandardAugmentedP2TR, ContractState
+from matt.contracts import ClauseOutput, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardClause, StandardAugmentedP2TR, ContractState
 from matt.script_helpers import check_input_contract, older
 
 
-class Vault(StandardP2TR):
+class Vault(StandardAugmentedP2TR):
+    State = None  # Stateless contract
+
     def __init__(self, alternate_pk: Optional[bytes], spend_delay: int, recover_pk: bytes, unvault_pk: bytes, *, has_partial_revault=True, has_early_recover=True):
         assert (alternate_pk is None or len(alternate_pk) == 32) and len(recover_pk) == 32 and len(unvault_pk) == 32
 

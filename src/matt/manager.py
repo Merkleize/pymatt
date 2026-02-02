@@ -17,8 +17,6 @@ from enum import Enum
 from io import BytesIO
 from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
-from typing_extensions import TypeGuard
-
 from .argtypes import SignerType
 from .btctools import script
 from .btctools.auth_proxy import AuthServiceProxy
@@ -26,7 +24,7 @@ from .btctools.key import ExtendedKey, sign_schnorr
 from .btctools.messages import COutPoint, CTransaction, CTxIn, CTxInWitness, CTxOut
 from .btctools.script import TaprootInfo
 from .btctools.segwit_addr import encode_segwit_address
-from .contracts import P2TR, AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardAugmentedP2TR, StandardP2TR, ContractState
+from .contracts import AugmentedP2TR, ClauseOutputAmountBehaviour, OpaqueP2TR, StandardAugmentedP2TR, ContractState, EMPTY_STATE
 from .utils import wait_for_output, wait_for_spending_tx
 
 
@@ -66,11 +64,11 @@ class SchnorrSigner:
 class ContractInstanceStatus(Enum):
     """Represents each of the possible conditions of a ContractInstance lifetime"""
     ABSTRACT = 0  # Before being funded, no attached UTXO, nor any defined state.
-    FUNDED = 1    # Funded, attached to a specific UTXO; if augmented, its state is defined.
+    FUNDED = 1    # Funded, attached to a specific UTXO; state is defined.
     SPENT = 2     # Already spent
 
 
-ContractT = TypeVar('ContractT', bound=Union[StandardP2TR, StandardAugmentedP2TR])
+ContractT = TypeVar('ContractT', bound=StandardAugmentedP2TR)
 
 
 class ContractInstance(Generic[ContractT]):
@@ -85,13 +83,12 @@ class ContractInstance(Generic[ContractT]):
         Initializes a new ContractInstance with the given contract template.
 
         Parameters:
-            contract (Union[StandardP2TR, StandardAugmentedP2TR]): The contract template for this instance,
-                which can either be a standard or augmented Pay-to-Taproot contract.
+            contract (StandardAugmentedP2TR): The contract template for this instance.
         """
 
         self.contract = contract
-        self.data: Optional[bytes] = None
-        self.data_expanded: Optional[ContractState] = None  # TODO: figure out a good API for this
+        self.data: bytes = b''
+        self.data_expanded: Optional[ContractState] = None
 
         self.manager: Optional[ContractManager] = None
 
@@ -109,31 +106,14 @@ class ContractInstance(Generic[ContractT]):
         # the new instances produced by spending this instance
         self.next: Optional[List[ContractInstance]] = None
 
-    def is_augmented(self) -> TypeGuard['ContractInstance[StandardAugmentedP2TR]']:
-        """
-        Checks if the Contract contained in this instance is augmented.
-
-        Returns:
-            bool: True if the contract is augmented, False otherwise.
-        """
-        return isinstance(self.contract, StandardAugmentedP2TR)
-
     def get_tr_info(self) -> TaprootInfo:
         """
         Returns the associated TaprootInfo object.
 
         Returns:
             TaprootInfo: An object with info about the taptree.
-
-        Raises:
-            ValueError: If the contract is augmented but no data is set for the instance.
         """
-        if not self.is_augmented():
-            return self.contract.get_tr_info()
-        else:
-            if self.data is None:
-                raise ValueError("Cannot generate address for augmented instance before setting the data")
-            return self.contract.get_tr_info(self.data)
+        return self.contract.get_tr_info(self.data)
 
     def get_address(self) -> str:
         """
@@ -173,12 +153,7 @@ class ContractInstance(Generic[ContractT]):
         Returns:
             Tuple[str, dict]: A tuple containing the name of the clause used and a dictionary of the arguments provided to the clause.
         """
-        if self.is_augmented():
-            assert self.data is not None
-
-            return self.contract.decode_wit_stack(self.data, stack_elems)
-        else:
-            return self.contract.decode_wit_stack(stack_elems)
+        return self.contract.decode_wit_stack(self.data, stack_elems)
 
     def __repr__(self):
         value = None
@@ -297,12 +272,7 @@ class ContractManager:
         """
 
         self._check_instance(instance, exp_statuses=ContractInstanceStatus.ABSTRACT)
-        if instance.is_augmented():
-            if instance.data is None:
-                raise ValueError("Data not set in instance")
-            scriptPubKey = instance.contract.get_tr_info(instance.data).scriptPubKey
-        else:
-            scriptPubKey = instance.contract.get_tr_info().scriptPubKey
+        scriptPubKey = instance.contract.get_tr_info(instance.data).scriptPubKey
 
         if self.mine_automatically:
             self._mine_blocks(1)
@@ -389,11 +359,9 @@ class ContractManager:
                 ccv_amount = instance.funding_tx.vout[instance.outpoint.n].nValue
                 for clause_output in next_outputs:
                     out_contract = clause_output.next_contract
-                    if isinstance(out_contract, (P2TR, OpaqueP2TR)):
+                    if isinstance(out_contract, OpaqueP2TR):
                         out_scriptPubKey = out_contract.get_tr_info().scriptPubKey
                     elif isinstance(out_contract, AugmentedP2TR):
-                        if clause_output.next_state is None:
-                            raise ValueError("Missing data for augmented output")
                         out_scriptPubKey = out_contract.get_tr_info(clause_output.next_state.encode()).scriptPubKey
                     else:
                         raise ValueError("Unsupported contract type")
@@ -599,12 +567,9 @@ class ContractManager:
                     out_contract = clause_output.next_contract
                     new_instance = ContractInstance(out_contract)
 
-                    if isinstance(out_contract, (StandardP2TR, StandardAugmentedP2TR)):
-                        if isinstance(out_contract, StandardAugmentedP2TR):
-                            if clause_output.next_state is None:
-                                raise ValueError("Missing data for augmented output")
-                            new_instance.data = clause_output.next_state.encode()
-                            new_instance.data_expanded = clause_output.next_state
+                    if isinstance(out_contract, StandardAugmentedP2TR):
+                        new_instance.data = clause_output.next_state.encode()
+                        new_instance.data_expanded = clause_output.next_state
 
                         new_instance.last_height = instance.last_height
 
@@ -615,7 +580,7 @@ class ContractManager:
                         out_contracts[output_index] = new_instance
 
                         next_instances.append(new_instance)
-                    elif isinstance(out_contract, (P2TR, OpaqueP2TR)):
+                    elif isinstance(out_contract, OpaqueP2TR):
                         continue  # nothing to do, will not track this output
                     else:
                         raise ValueError("Unsupported contract type")
@@ -626,25 +591,20 @@ class ContractManager:
             self.add_instance(instance)
         return result
 
-    def fund_instance(self, contract: ContractT, amount: int, data: Optional[ContractState] = None) -> ContractInstance[ContractT]:
+    def fund_instance(self, contract: ContractT, amount: int, data: ContractState = EMPTY_STATE) -> ContractInstance[ContractT]:
         """
         Creates a new contract instance from a specified contract template, funds it with a specified amount of satoshis,
         and adds it to the manager.
 
         Parameters:
-            contract (Union[StandardP2TR, StandardAugmentedP2TR]): The contract template to create an instance of. This can be
-                either a standard P2TR contract or an augmented P2TR contract with additional data capabilities.
+            contract (StandardAugmentedP2TR): The contract template to create an instance of.
             amount (int): The amount in satoshis to fund the new contract instance with. This amount will be sent to the
                 contract's address in a funding transaction.
-            data (Optional[ContractState], optional): For augmented P2TR contracts, this parameter should provide the initial
-                state data to be embedded within the contract instance. For standard P2TR contracts, this must be None.
+            data (ContractState): The initial state data for the contract instance. Defaults to EMPTY_STATE for
+                stateless contracts.
 
         Returns:
             ContractInstance: The newly created and funded contract instance, which is now being managed by this ContractManager.
-
-        Raises:
-            ValueError: If an attempt is made to provide data for a (non-augmented) P2TR contract, or if data is not provided for
-                an augmented P2TR contract.
 
         Note:
             - If `mine_automatically` is set to True, this method will also trigger the mining of a new block.
@@ -652,15 +612,8 @@ class ContractManager:
         """
 
         instance = ContractInstance(contract)
-
-        if isinstance(contract, StandardP2TR) and data is not None:
-            raise ValueError("The data must be None for a contract with no embedded data")
-
-        if isinstance(contract, StandardAugmentedP2TR):
-            if data is None:
-                raise ValueError("The data must be provided for an augmented P2TR contract instance")
-            instance.data_expanded = data
-            instance.data = data.encode()
+        instance.data_expanded = data
+        instance.data = data.encode()
         self.add_instance(instance)
         txid = self.rpc.sendtoaddress(instance.get_address(), amount/100_000_000)
         self.wait_for_outpoint(instance, txid)

@@ -6,7 +6,7 @@ from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.messages import sha256
 from matt.btctools import script
 from matt.btctools.script import OP_ADD, OP_CAT, OP_CHECKSIG, OP_CHECKTEMPLATEVERIFY, OP_DUP, OP_ENDIF, OP_EQUALVERIFY, OP_FROMALTSTACK, OP_IF, OP_LESSTHAN, OP_OVER, OP_SHA256, OP_SUB, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, OP_WITHIN, CScript
-from matt.contracts import P2TR, ClauseOutput, StandardClause, StandardP2TR, StandardAugmentedP2TR, ContractState
+from matt.contracts import ClauseOutput, SimpleP2TR, StandardClause, StandardAugmentedP2TR, ContractState
 from matt.script_helpers import check_input_contract, check_output_contract
 from matt.utils import encode_wit_element, make_ctv_template
 
@@ -49,7 +49,9 @@ class RPS:
 #  - c_a
 # spending conditions:
 #  - bob_pk    (m_b) => RPSGameS1[m_b]
-class RPSGameS0(StandardP2TR):
+class RPSGameS0(StandardAugmentedP2TR):
+    State = None  # Stateless contract
+
     def __init__(self, alice_pk: bytes, bob_pk: bytes, c_a: bytes, stake: int = DEFAULT_STAKE):
         assert len(alice_pk) == 32 and len(bob_pk) == 32 and len(c_a) == 32
 
@@ -160,8 +162,8 @@ class RPSGameS1(StandardAugmentedP2TR):
                 OP_CHECKTEMPLATEVERIFY
             ])
 
-        alice_spk = P2TR(self.alice_pk, []).get_tr_info().scriptPubKey
-        bob_spk = P2TR(self.bob_pk, []).get_tr_info().scriptPubKey
+        alice_spk = SimpleP2TR(self.alice_pk).get_tr_info(b'').scriptPubKey
+        bob_spk = SimpleP2TR(self.bob_pk).get_tr_info(b'').scriptPubKey
 
         tmpl_alice_wins = make_ctv_template([(alice_spk, 2*self.stake)])
         tmpl_bob_wins = make_ctv_template([(bob_spk, 2*self.stake)])

@@ -2,7 +2,7 @@ from examples.game256.game256_contracts import G256_S0, G256_S1, G256_S2, Comput
 
 from matt.btctools.common import sha256
 from matt.btctools.messages import CTxOut
-from matt.contracts import P2TR
+from matt.contracts import SimpleP2TR
 from matt.hub.fraud import Bisect_1, Bisect_2, Leaf
 from matt.manager import ContractManager, SchnorrSigner
 from matt.merkle import is_power_of_2
@@ -34,7 +34,7 @@ def test_leaf_reveal_alice(manager: ContractManager):
     outputs = [
         CTxOut(
             nValue=AMOUNT,
-            scriptPubKey=P2TR(alice_key.pubkey[1:], []).get_tr_info().scriptPubKey
+            scriptPubKey=SimpleP2TR(alice_key.pubkey[1:]).get_tr_info(b'').scriptPubKey
         )
     ]
 
@@ -63,7 +63,7 @@ def test_leaf_reveal_bob(manager: ContractManager):
     outputs = [
         CTxOut(
             nValue=AMOUNT,
-            scriptPubKey=P2TR(bob_key.pubkey[1:], []).get_tr_info().scriptPubKey
+            scriptPubKey=SimpleP2TR(bob_key.pubkey[1:]).get_tr_info(b'').scriptPubKey
         )
     ]
 
@@ -264,7 +264,7 @@ def test_fraud_proof_full(manager: ContractManager, report):
     outputs = [
         CTxOut(
             nValue=AMOUNT,
-            scriptPubKey=P2TR(bob_key.pubkey[1:], []).get_tr_info().scriptPubKey
+            scriptPubKey=SimpleP2TR(bob_key.pubkey[1:]).get_tr_info(b'').scriptPubKey
         )
     ]
     out_instances = inst("bob_reveal", bob_signer, outputs)(

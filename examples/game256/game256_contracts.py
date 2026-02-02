@@ -5,7 +5,7 @@ from matt import NUMS_KEY
 from matt.argtypes import BytesType, IntType, SignerType
 from matt.btctools.common import sha256
 from matt.btctools.script import OP_ADD, OP_CHECKSIG, OP_DUP, OP_EQUAL, OP_FROMALTSTACK, OP_NOT, OP_PICK, OP_ROT, OP_SHA256, OP_SWAP, OP_TOALTSTACK, OP_VERIFY, CScript
-from matt.contracts import ClauseOutput, StandardClause, StandardAugmentedP2TR, StandardP2TR, ContractState
+from matt.contracts import ClauseOutput, StandardClause, StandardAugmentedP2TR, ContractState
 from matt.hub.fraud import Bisect_1, Computer, Leaf
 from matt.merkle import MerkleTree
 from matt.script_helpers import check_input_contract, check_output_contract, dup, merkle_root, older
@@ -19,7 +19,9 @@ from matt.utils import encode_wit_element
 #       Do we need "clause" algebra?
 
 
-class G256_S0(StandardP2TR):
+class G256_S0(StandardAugmentedP2TR):
+    State = None  # Stateless contract
+
     def __init__(self, alice_pk: bytes, bob_pk: bytes, forfait_timeout: int = 10):
         self.alice_pk = alice_pk
         self.bob_pk = bob_pk
