@@ -10,11 +10,13 @@ See [checkcontractverify.md](checkcontractverify.md) for the semantics of `OP_CH
 
 ## Contracts, programs and clauses
 
-The internal pubkey (or the _naked_ pubkey for an augmented P2TR), together with the taptree, constitutes the ___program___ of the contract, which encodes all the spending conditions of the contract.
+The internal pubkey (the _naked_ pubkey), together with the taptree, constitutes the ___program___ of the contract, which encodes all the spending conditions of the contract.
+
+All contracts in this framework are _augmented_ P2TR contracts, meaning they can have embedded data. For stateless contracts (those without state), the embedded data is simply the empty buffer `b''`, which by the semantics of `tweak_embed_data` leaves the internal pubkey unchanged. Note that embedding the empty buffer b'' (or the number 0, which encodes as the empty buffer in Script) leaves the internal pubkey unchanged per tweak_embed_data semantics, and can therefore be used for any contract that does not actually need to embed any data.
 
 An actual UTXO whose `scriptPubKey` is a program, possibly with some specified embedded _data_, is a ___contract instance___.
 
-We call ___clause___ each of the spending conditions in the taptree of. Each clause might also specify the state transition rules, by defining the program of one or more of the outputs.<br>
+We call ___clause___ each of the spending conditions in the taptree. Each clause might also specify the state transition rules, by defining the program of one or more of the outputs.<br>
 The keypath, if not a NUMS (Nothing-Up-My-Sleeve) point, can also be considered an additional special clause with no condition on the outputs.
 
 ### Merklelized data
@@ -108,10 +110,6 @@ where:
 The spending condition can be any predicate that can be expressed in Script, with access to all the `params`, `vars` and `args`.
 
 _Note_: this ignores the technical details of how to encode/decode the state variables to/from a single hash; that is an implementation detail that can safely be left out when discussing the semantic of a smart contract.
-
-### Default contract
-
-The contract `P2TR{pk}` is equal to the output script descriptor `tr(pk)`.
 
 ### Example: Vault
 

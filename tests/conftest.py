@@ -46,7 +46,7 @@ def manager(rpc, request: pytest.FixtureRequest, utxo_graph: bool):
         create_utxo_graph(manager, f"tests/graphs/{request.node.name}.html")
 
 
-class TestReport:
+class Report:
     def __init__(self):
         self.sections = {}
 
@@ -66,6 +66,6 @@ class TestReport:
 
 @pytest.fixture(scope="session")
 def report():
-    report_obj = TestReport()
+    report_obj = Report()
     yield report_obj
     report_obj.finalize_report("report.md")

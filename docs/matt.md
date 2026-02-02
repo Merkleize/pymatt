@@ -15,12 +15,12 @@ A script that adds such restriction is called a covenant, and that is not possib
 The core idea in MATT is to introduce the following capability to be accessible within Script:
 
 - force an output to have a certain Script (and their amounts)
-- attach a piece of data to an output
+- optionally, attach a piece of data to an output
 - read the data of the current input (or another one)
 
 The first is common to many other covenant proposals, for example [OP_CHECKTEMPLATEVERIFY](https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki) is a long-discussed proposal that can constrain all the outputs at the same time.
 
-The part relative to the data is more specific: this data can be as short as a 32-byte hash, but the key is that the data of an output is not decided when the UTXO is first created, but it is dynamically computed in Script (and therefore it can depend on "parameters" that are passed by the spender). This is extremely powerful, as it allows to create some sort of "state machines" where the execution can decide:
+The part relative to the data is more specific: this data can be an arbitrary buffer. The key is that the data of an output is not decided when the UTXO is first created, but it is dynamically computed in Script (and therefore it can depend on "parameters" that are passed by the spender). This is extremely powerful, as it allows to create some sort of "state machines" where the execution can decide:
 
 - what is the next "state" of the state machine (by constraining the Script of the outputs)
 - what is the "data" attached to the next state
