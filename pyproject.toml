@@ -13,7 +13,7 @@ dependencies = [
 description = 'Merkleize All The Things'
 keywords = ['covenant', 'smart contracts', 'bitcoin']
 license = { file = 'LICENSE' }
-name = 'matt'
+name = 'pymatt'
 readme = 'README.md'
 requires-python = '>=3.8'
 version = '0.1.0'
@@ -24,6 +24,9 @@ examples = [
   'prompt-toolkit >=3.0.31,<3.1',
   'python-dotenv ==0.13.0',
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/matt"]
 
 [tool.flake8]
 max-line-length = 120
